@@ -13,6 +13,7 @@ Design-driven Monte Carlo estimator of a clinical trial's **total sponsor budget
 - **Never invent a number silently.** A new value without a source is added as grade `D`, `source = "Assumption"`, with the rationale in `notes`. A derived value is grade `C` with the derivation in `source`. Then add it to README §6 if it may matter.
 - **Keep README in sync**: any change to methodology → README §2; any decision → §5 (decision log); any new assumption → §6; any new source → §9 with URL.
 - Do not change the design schema (README §3) or the CSV column sets without asking first.
+- **App code follows the `developing-with-streamlit` skill** (`.agents/skills/`): load it before touching `app/`. House rules (D42): heavy tabs compute only when open (`st.tabs(on_change="rerun")` + `.open`), editors always rendered; no `use_container_width`; `alt=` on charts / tables / editors; Material icons, sentence casing; theme only via `.streamlit/config.toml` (no CSS). Verify changes with the agent API (`--server.enableAgentApi=true` on the command line, never in config) and keep checks as `AppTest` tests.
 - Reviewer input reaches `data/` only through `python -m trialcost.suggestions apply`, run by Vincent (D40). The app must never write to `data/`.
 
 ## Stack and conventions

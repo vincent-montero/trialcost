@@ -118,7 +118,7 @@ def from_edits(
 
 def read(path_or_buffer) -> pd.DataFrame:
     text = {"table": str, "row_id": str, "field": str, "rationale": str, "reviewer": str}
-    df = pd.read_csv(path_or_buffer, dtype=text, keep_default_na=False, na_values={})
+    df = pd.read_csv(path_or_buffer, dtype=text, keep_default_na=False)
     missing = set(COLUMNS) - set(df.columns)
     if missing:
         raise ValueError(f"suggestions file is missing columns {sorted(missing)}")

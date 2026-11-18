@@ -5,5 +5,24 @@ gatherUsageStats = false
 # Uploads are small suggestion CSVs.
 maxUploadSize = 1
 
+# Single locked light look (developing-with-streamlit theme guide: "shadcn" shape).
+# Light only because the chart palette (app/charts.py) is validated for a light surface.
+# Accent = categorical slot 1 so buttons, links and charts share one blue. System fonts:
+# no third-party font request on the hosted app.
 [theme]
 base = "light"
+primaryColor = "#2a78d6"
+linkColor = "#2a78d6"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FAFAFA"
+codeBackgroundColor = "#F4F4F5"
+textColor = "#09090B"
+borderColor = "#E4E4E7"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "6px"
+buttonRadius = "6px"
+# Reference palette, fixed order (validated adjacent pairs; see the dataviz rules).
+chartCategoricalColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
+dataframeBorderColor = "#E4E4E7"
+dataframeHeaderBackgroundColor = "#FAFAFA"

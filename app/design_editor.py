@@ -26,7 +26,7 @@ def _try(design: Design, label: str, change: Callable[[Design], Design]) -> Desi
     try:
         return change(design)
     except (ValidationError, ValueError, StopIteration) as e:
-        st.error(f"{label}: edit not applied, the design would be invalid.\n\n{e}")
+        st.error(str(e), title=f"{label}: edit not applied (the design would be invalid)")
         return design
 
 
@@ -45,6 +45,7 @@ def countries(d: Design, k: str, cat: Catalogue) -> Design:
     st.markdown("**Countries and sites**")
     table = st.data_editor(
         editing.countries_table(d),
+        alt="Countries and number of sites",
         num_rows="dynamic",
         key=f"{k}_countries",
         column_config={
@@ -85,7 +86,7 @@ def population(d: Design, k: str) -> Design:
             "rate_mean": LogNormal(median=rate, gsd=gsd),
             "annual_dropout_rate": Beta(mean=max(drop, 1e-4), kappa=kappa),
         }
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3 = st.columns(3, vertical_alignment="bottom")
     sf_now = d.population.screen_failure_rate.central()
     sf = c1.slider(
         "Screen-failure rate (placeholder)", 0.0, 0.9, float(sf_now), 0.05, key=f"{k}_sf"
@@ -123,7 +124,7 @@ def operations(d: Design, k: str) -> Design:
     )
     if interval != interval_now:  # keep a distribution from the file unless edited
         ops["monitoring_interval_months"] = interval
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5 = st.columns(5, vertical_alignment="bottom")
     ops["dmc"] = c1.toggle("DMC", o.dmc, key=f"{k}_dmc")
     ops["central_imaging_reading"] = c2.toggle(
         "Central imaging", o.central_imaging_reading, key=f"{k}_img"
@@ -146,13 +147,13 @@ def operations(d: Design, k: str) -> Design:
 def visits(d: Design, k: str, cat: Catalogue) -> Design:
     st.markdown("**Visit schedule**")
     gen_key = f"{k}_generated"
-    with st.expander("Quick mode: regular visits"):
-        c1, c2, c3 = st.columns(3)
+    with st.expander("Quick mode: regular visits", icon=":material/event_repeat:"):
+        c1, c2, c3 = st.columns(3, vertical_alignment="bottom")
         every = c1.number_input("Every (weeks)", 1, 26, 4, key=f"{k}_every")
         until = c2.number_input("Until week", 1, 260, 52, key=f"{k}_until")
         post = [v.id for v in d.visits if v.day > 0]
         template = c3.selectbox("Procedures as in visit", post, key=f"{k}_tmpl")
-        if st.button("Replace follow-up visits", key=f"{k}_gen"):
+        if st.button("Replace follow-up visits", key=f"{k}_gen", icon=":material/autorenew:"):
             st.session_state[gen_key] = editing.regular_visits(
                 d, int(every), int(until), template
             ).model_dump_json()
@@ -163,6 +164,7 @@ def visits(d: Design, k: str, cat: Catalogue) -> Design:
     labels = cat.procedures["label"]
     grid = st.data_editor(
         editing.visits_grid(source, ids),
+        alt="Visit schedule: one row per visit, one tick box per procedure",
         num_rows="dynamic",
         hide_index=True,
         key=f"{k}_visits_{hash(st.session_state.get(gen_key, ''))}",
@@ -181,16 +183,21 @@ def visits(d: Design, k: str, cat: Catalogue) -> Design:
 
 def design_editor(base: Design, base_name: str, cat: Catalogue) -> Design:
     k = f"ed_{base_name}"
-    d = basics(base, k)
-    d = countries(d, k, cat)
-    d = population(d, k)
-    d = operations(d, k)
-    d = visits(d, k, cat)
+    with st.container(border=True):
+        d = basics(base, k)
+        d = countries(d, k, cat)
+    with st.container(border=True):
+        d = population(d, k)
+    with st.container(border=True):
+        d = operations(d, k)
+    with st.container(border=True):
+        d = visits(d, k, cat)
     st.download_button(
         "Download design (YAML)",
         editing.to_yaml(d),
         file_name=f"{base_name}-edited.yaml",
         mime="text/yaml",
         key=f"{k}_download",
+        icon=":material/download:",
     )
     return d

@@ -61,7 +61,9 @@ evidence grade: **A** read from an official tariff, **B** secondary source, **C*
     cols = st.columns(4)
     names = {"A": "A sourced", "B": "B secondary", "C": "C derived", "D": "D assumption"}
     for col, grade in zip(cols, "ABCD", strict=True):
-        col.metric(names[grade], f"{100 * shares.get(grade, 0):.0f} %")
+        col.metric(
+            names[grade], f"{100 * shares.get(grade, 0):.0f} %", border=True, height="stretch"
+        )
 
     bench = ROOT / "reports" / "benchmark-validation.csv"
     if bench.exists():
@@ -73,6 +75,7 @@ evidence grade: **A** read from an official tariff, **B** secondary source, **C*
                 columns={"ratio_model_to_benchmark": "model / benchmark"}
             ),
             hide_index=True,
+            alt="Model to benchmark ratios for fair comparisons",
         )
         st.caption(
             "Reading: mid-size phase 2 in range; large, long trials ~15-30 % above benchmarks; "

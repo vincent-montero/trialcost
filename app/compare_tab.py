@@ -26,13 +26,18 @@ def scenarios() -> dict[str, tuple[str, str]]:
 
 
 def save_control(design: Design, suggestions_json: str) -> None:
-    c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
-    name = c1.text_input(
-        "Save the current design as a scenario", placeholder="e.g. monthly full SDV", key="sc_name"
-    )
-    if c2.button("Save scenario", key="sc_save", disabled=not name):
+    with st.container(horizontal=True, vertical_alignment="bottom"):
+        name = st.text_input(
+            "Save the current design as a scenario",
+            placeholder="e.g. monthly full SDV",
+            key="sc_name",
+        )
+        save = st.button(
+            "Save scenario", key="sc_save", icon=":material/bookmark_add:", disabled=not name
+        )
+    if save:
         scenarios()[name.strip()] = (design.model_dump_json(), suggestions_json)
-        st.toast(f"Saved scenario “{name.strip()}”")
+        st.toast(f"Saved scenario “{name.strip()}”", icon=":material/bookmark_added:")
 
 
 def compare_tab(
@@ -42,7 +47,8 @@ def compare_tab(
     if len(saved) < 2:
         st.info(
             "Save at least two scenarios (box above the tabs), e.g. the design as loaded, then "
-            "after a change in the Design tab. The first selected scenario is the baseline."
+            "after a change in the Design tab. The first selected scenario is the baseline.",
+            icon=":material/info:",
         )
         if saved:
             st.caption("Saved: " + ", ".join(saved))
@@ -65,14 +71,24 @@ def compare_tab(
     for col, name in zip(cols, chosen, strict=True):
         row = table.loc[name]
         delta = None if name == base_name else f"{row.delta_cost_P50_pct:+.1f} % vs {base_name}"
-        col.metric(f"{name}: cost P50", eur(row.cost_P50), delta=delta, delta_color="inverse")
+        col.metric(
+            f"{name}: cost P50",
+            eur(row.cost_P50),
+            delta=delta,
+            delta_color="inverse",
+            border=True,
+            height="stretch",
+        )
         col.caption(
             f"P10 {eur(row.cost_P10)} · P90 {eur(row.cost_P90)} · duration P50 "
             f"{row.duration_P50:.1f} mo ({row.delta_duration_P50:+.1f})"
         )
 
     st.markdown("**Cumulative distribution of total cost**")
-    st.altair_chart(charts.ecdf({name: results[name].total for name in chosen}), width="stretch")
+    st.altair_chart(
+        charts.ecdf({name: results[name].total for name in chosen}),
+        alt="Cumulative distribution of total cost for each compared scenario",
+    )
 
     for name in chosen[1:]:
         st.markdown(f"**{name}** vs **{base_name}**")
@@ -81,18 +97,26 @@ def compare_tab(
         if saved[base_name][1] != saved[name][1]:
             changes.append(f"reviewer suggestions: {n_a} → {n_b}")
         st.caption("Design changes: " + ("; ".join(changes) if changes else "none"))
-        by = st.radio(
-            "Δ by", ["category", "resource", "country"], horizontal=True, key=f"sc_by_{name}"
+        by = st.segmented_control(
+            "Δ by",
+            ["category", "resource", "country"],
+            default="category",
+            required=True,
+            key=f"sc_by_{name}",
+            persist_state="page",
         )
         deltas = report.category_deltas(results[base_name], results[name], by)
         deltas = deltas[deltas.abs() >= 500]  # hide rounding-level changes
         if deltas.empty:
             st.caption("No group moves by more than €500.")
         else:
-            st.altair_chart(charts.delta_bars(deltas, "Δ mean cost"), width="stretch")
+            st.altair_chart(
+                charts.delta_bars(deltas, "Δ mean cost"),
+                alt=f"Change in mean cost by {by}, {name} versus {base_name}",
+            )
 
-    with st.expander("Comparison table"):
-        st.dataframe(table.round(1))
-    if st.button("Clear saved scenarios", key="sc_clear"):
+    with st.expander("Comparison table", icon=":material/table:"):
+        st.dataframe(table.round(1), alt="Cost and duration quantiles per scenario, with changes")
+    if st.button("Clear saved scenarios", key="sc_clear", icon=":material/delete_sweep:"):
         st.session_state["scenarios"] = {}
         st.rerun()

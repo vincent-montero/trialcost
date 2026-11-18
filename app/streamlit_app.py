@@ -29,7 +29,9 @@ from trialcost.simulate import SimulationResult, run
 ROOT = Path(__file__).resolve().parents[1]
 DESIGNS_DIR = ROOT / "designs"
 
-st.set_page_config(page_title="Clinical trial cost estimator", page_icon="🧪", layout="wide")
+st.set_page_config(
+    page_title="Clinical trial cost estimator", page_icon=":material/science:", layout="wide"
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -98,115 +100,157 @@ def quantiles(x: np.ndarray) -> tuple[float, float, float]:
 
 
 def sidebar() -> tuple[Design, str, int, int, float | None]:
-    st.sidebar.header("Design")
-    files = design_files()
-    name = st.sidebar.selectbox(
-        "Start from",
-        list(files),
-        help="Archetypes first; `ref-*` are reference designs used for benchmark validation.",
-    )
-    design = load_design(files[name])
-    st.sidebar.header("Simulation")
-    n_sims = st.sidebar.select_slider("Simulations", [1_000, 2_000, 5_000, 10_000], value=5_000)
-    seed = st.sidebar.number_input("Seed", min_value=0, value=42, step=1)
-    budget = st.sidebar.number_input(
-        "Budget to test (€, 0 = none)", min_value=0.0, value=0.0, step=250_000.0, format="%.0f"
-    )
-    return design, name, int(n_sims), int(seed), (budget or None)
+    with st.sidebar:
+        st.header("Design", anchor=False)
+        files = design_files()
+        name = st.selectbox(
+            "Start from",
+            list(files),
+            key="design_file",
+            help="Archetypes first; `ref-*` are reference designs used for benchmark validation.",
+        )
+        st.header("Simulation", anchor=False)
+        n_sims = st.select_slider(
+            "Simulated trials", [1_000, 2_000, 5_000, 10_000], value=5_000, key="n_sims"
+        )
+        seed = st.number_input("Random seed", min_value=0, value=42, step=1, key="seed")
+        budget = st.number_input(
+            "Budget to test (€, 0 = none)",
+            min_value=0.0,
+            value=0.0,
+            step=250_000.0,
+            format="%.0f",
+            key="budget",
+        )
+    return load_design(files[name]), name, int(n_sims), int(seed), (budget or None)
 
 
 def headline(result: SimulationResult, budget: float | None) -> None:
     d = result.design
-    st.subheader(f"{d.name}: N = {d.n_randomised}, {d.n_sites} sites, {len(d.countries)} countries")
+    st.subheader(
+        f"{d.name}: N = {d.n_randomised}, {d.n_sites} sites, {len(d.countries)} countries",
+        anchor=False,
+    )
     cost, dur, lpi = (
         quantiles(x) for x in (result.total, result.duration, result.quantities.t_lpi)
     )
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total cost (P50)", eur(cost[1]), help=f"P10 {eur(cost[0])} · P90 {eur(cost[2])}")
-    c2.metric("Duration (P50)", f"{dur[1]:.1f} months", help=f"P10 {dur[0]:.1f} · P90 {dur[2]:.1f}")
-    c3.metric(
-        "Recruitment LPI (P50)", f"{lpi[1]:.1f} months", help=f"P10 {lpi[0]:.1f} · P90 {lpi[2]:.1f}"
-    )
-    c4.metric("Cost per randomised patient (P50)", eur(cost[1] / d.n_randomised))
+    cards = [
+        ("Total cost (P50)", eur(cost[1]), f"P10 {eur(cost[0])} · P90 {eur(cost[2])}"),
+        ("Duration (P50)", f"{dur[1]:.1f} months", f"P10 {dur[0]:.1f} · P90 {dur[2]:.1f}"),
+        ("Recruitment LPI (P50)", f"{lpi[1]:.1f} months", f"P10 {lpi[0]:.1f} · P90 {lpi[2]:.1f}"),
+        ("Cost per randomised patient (P50)", eur(cost[1] / d.n_randomised), None),
+    ]
+    if budget:
+        cards.append((f"P(cost ≤ {eur(budget)})", f"{np.mean(result.total <= budget):.0%}", None))
+    for col, (label, value, help_text) in zip(st.columns(len(cards)), cards, strict=True):
+        col.metric(label, value, help=help_text, border=True, height="stretch")
     st.caption(
-        f"Total cost P10 {eur(cost[0])} · P50 {eur(cost[1])} · P90 {eur(cost[2])} — "
+        f"Total cost P10 {eur(cost[0])} · P50 {eur(cost[1])} · P90 {eur(cost[2])}. "
         f"EUR 2026, {result.n_sims:,} simulated trials."
     )
-    if budget:
-        st.info(f"P(total cost ≤ {eur(budget)}) = {np.mean(result.total <= budget):.0%}")
 
 
 def results_tab(
     result: SimulationResult, design_json: str, suggestions_json: str, n_sims: int, seed: int
 ) -> None:
-    c1, c2 = st.columns(2)
-    with c1:
+    cost_col, duration_col = st.columns(2)
+    with cost_col:
         st.markdown("**Total cost** (EUR 2026)")
-        st.altair_chart(charts.histogram(result.total, "Total cost"), width="stretch")
-    with c2:
+        st.altair_chart(
+            charts.histogram(result.total, "Total cost"),
+            alt="Distribution of simulated total trial cost with P10, P50 and P90 markers",
+        )
+    with duration_col:
         st.markdown("**Duration**, study start to CSR (months)")
         st.altair_chart(
             charts.histogram(result.duration, "Duration (months)", money=False),
-            width="stretch",
+            alt="Distribution of simulated trial duration with P10, P50 and P90 markers",
         )
 
-    st.markdown("#### Where the money goes")
-    by = st.radio(
-        "Break down by", ["category", "resource", "country"], horizontal=True, key="breakdown_by"
+    st.subheader("Where the money goes", anchor=False)
+    by = st.segmented_control(
+        "Break down by",
+        ["category", "resource", "country"],
+        default="category",
+        required=True,
+        key="breakdown_by",
+        persist_state="page",
     )
     table = report.breakdown(result, by)
     st.caption("Bar = mean cost; whisker = P10-P90 across simulated trials.")
-    st.altair_chart(charts.breakdown(table, by), width="stretch")
-    with st.expander("Table"):
+    st.altair_chart(
+        charts.breakdown(table, by), alt=f"Mean cost by {by}, largest first, with P10-P90 range"
+    )
+    with st.expander("Table", icon=":material/table:"):
         st.dataframe(
             table.assign(share=100 * table["share"]).round(0),
             column_config={"share": st.column_config.NumberColumn("share %", format="%.1f")},
+            alt=f"Cost by {by}: P10, P50, P90, mean and share of the total",
         )
 
-    st.markdown("#### Cost of dropout")
+    st.subheader("Cost of dropout", anchor=False)
     dp = dropout_table(design_json, suggestions_json, n_sims, seed)
-    d1, d2, d3 = st.columns(3)
-    d1.metric(
-        "Completers (P50)",
-        f"{dp.loc['completers', 'P50']:.1f} of {result.design.n_randomised}",
-    )
-    d2.metric(
-        "Cost per completer (P50)",
-        eur(dp.loc["cost_per_completer_eur", "P50"]),
-        delta=f"+{dp.loc['completer_cost_premium_pct', 'P50']:.1f} % vs no dropout",
-        delta_color="inverse",
-    )
-    d3.metric(
-        "Total cost change due to dropout (P50)",
-        eur(dp.loc["dropout_delta_cost_eur", "P50"]),
-        help="Dropouts stop generating visit costs; fixed and time-driven costs stay.",
-    )
+    premium = dp.loc["completer_cost_premium_pct", "P50"]
+    cards = [
+        (
+            "Completers (P50)",
+            f"{dp.loc['completers', 'P50']:.1f} of {result.design.n_randomised}",
+            None,
+        ),
+        (
+            "Cost per completer (P50)",
+            eur(dp.loc["cost_per_completer_eur", "P50"]),
+            f"+{premium:.1f} % vs the same design without dropout",
+        ),
+        (
+            "Total cost change due to dropout (P50)",
+            eur(dp.loc["dropout_delta_cost_eur", "P50"]),
+            "Dropouts stop generating visit costs; fixed and time-driven costs stay.",
+        ),
+    ]
+    for col, (label, value, help_text) in zip(st.columns(3), cards, strict=True):
+        col.metric(label, value, help=help_text, border=True, height="stretch")
 
-    st.markdown("#### Which assumptions matter most")
+    st.subheader("Which assumptions matter most", anchor=False)
     st.caption(
         "One-way sensitivity on the mean total cost: each input moves to its P10 then P90 "
-        "(0.5x / 1.5x if it is fixed) while the others keep their uncertainty."
+        "(0.5x / 1.5x if it is fixed) while the others keep their uncertainty. About 1 s."
     )
-    if st.button("Compute tornado", key="tornado_button") or st.session_state.get("tornado_on"):
-        st.session_state["tornado_on"] = True
+    if st.toggle("Show tornado", key="tornado_on", persist_state="page"):
         tt = tornado_table(design_json, suggestions_json, seed)
-        st.altair_chart(charts.tornado(tt), width="stretch")
-        with st.expander("Table"):
-            st.dataframe(tt.drop(columns=["base"]).round(0))
+        st.altair_chart(
+            charts.tornado(tt),
+            alt=f"Tornado: {tt['parameter'].iloc[0]} moves the mean total cost most",
+        )
+        with st.expander("Table", icon=":material/table:"):
+            st.dataframe(
+                tt.drop(columns=["base"]).round(0),
+                alt="Tornado inputs, mean total cost at low and high values, and swing",
+            )
 
 
 def main() -> None:
-    st.title("Clinical trial cost estimator")
+    st.title("Clinical trial cost estimator", anchor=False)
     st.caption(
         "Design-driven Monte Carlo estimate of a trial's total sponsor budget. Personal project, "
         "public data only. Many unit costs are expert-judgement placeholders: read results as "
         "orders of magnitude with honest uncertainty, not quotes."
     )
     base, base_name, n_sims, seed, budget = sidebar()
-    header = st.container()  # filled after the editor has run
+    header = st.container()  # filled once the design editor has run
     tab_results, tab_design, tab_compare, tab_assumptions, tab_method = st.tabs(
-        ["Results", "Design", "Compare scenarios", "Assumptions & suggestions", "Method & caveats"]
+        [
+            ":material/insights: Results",
+            ":material/tune: Design",
+            ":material/compare_arrows: Compare scenarios",
+            ":material/rate_review: Assumptions & suggestions",
+            ":material/menu_book: Method & caveats",
+        ],
+        key="main_tabs",
+        on_change="rerun",
     )
+    # Always rendered: the editors hold the user's edits (data editors cannot persist
+    # their state while hidden) and are cheap.
     with tab_design:
         design = design_editor(base, base_name, base_catalogue())
     design_json, suggestions_json = design.model_dump_json(), active_json()
@@ -217,19 +261,25 @@ def main() -> None:
             st.caption(f"Edited from `{base_name}` (see the Design tab).")
         if n := len(active()):
             st.warning(
-                f"{n} reviewer suggestion(s) active: results use them instead of the published "
-                "catalogue (Assumptions & suggestions tab)."
+                "Results use them instead of the published catalogue; see the Assumptions & "
+                "suggestions tab.",
+                title=f"{n} reviewer suggestion(s) active",
+                icon=":material/rate_review:",
             )
         save_control(design, suggestions_json)
-    with tab_results:
-        results_tab(result, design_json, suggestions_json, n_sims, seed)
-    with tab_compare:
-        compare_tab(lambda dj, sj: simulate(dj, sj, n_sims, seed), eur)
     with tab_assumptions:
         share = result.costs.by("item").mean(axis=1) / result.total.mean()
         assumptions_tab(base_catalogue(), session_catalogue(suggestions_json), share)
-    with tab_method:
-        method_tab(result, session_catalogue(suggestions_json))
+    # Only computed when open: extra simulations (dropout comparison, tornado, scenarios).
+    if tab_results.open:
+        with tab_results:
+            results_tab(result, design_json, suggestions_json, n_sims, seed)
+    if tab_compare.open:
+        with tab_compare:
+            compare_tab(lambda dj, sj: simulate(dj, sj, n_sims, seed), eur)
+    if tab_method.open:
+        with tab_method:
+            method_tab(result, session_catalogue(suggestions_json))
 
 
 main()

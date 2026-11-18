@@ -32,7 +32,7 @@ def active() -> pd.DataFrame:
 
 
 def active_json() -> str:
-    return active().to_json(orient="records")
+    return active().to_json(orient="records") or "[]"
 
 
 def _display_table(table: str, catalogue: Catalogue, item_share: pd.Series) -> pd.DataFrame:
@@ -58,8 +58,8 @@ def assumptions_tab(base: Catalogue, session: Catalogue, item_share: pd.Series) 
     reviewer = st.text_input(
         "Your name or role (optional, kept in the suggestions file)", key="sg_reviewer"
     )
-    c1, c2 = st.columns([2, 1])
-    table = c1.selectbox("Table", list(LABELS), format_func=LABELS.get, key="sg_table")
+    c1, c2 = st.columns([2, 1], vertical_alignment="bottom")
+    table = c1.selectbox("Table", list(LABELS), format_func=lambda t: LABELS[t], key="sg_table")
     only_d = c2.toggle("Assumptions only (grade D)", value=False, key="sg_only_d")
 
     shown = _display_table(table, session, item_share)
@@ -71,6 +71,7 @@ def assumptions_tab(base: Catalogue, session: Catalogue, item_share: pd.Series) 
     editable = set(sg.TABLES[table][3]) | {"rationale"}
     edited = st.data_editor(
         shown,
+        alt=f"{LABELS[table]}: values, evidence grade, source and notes; editable ranges",
         key=f"sg_editor_{table}_{hash(active_json())}_{only_d}",
         hide_index=True,
         disabled=[c for c in shown.columns if c not in editable],
@@ -83,16 +84,18 @@ def assumptions_tab(base: Catalogue, session: Catalogue, item_share: pd.Series) 
             ),
         },
     )
-    if st.button("Add my changes as suggestions", key="sg_add", type="primary"):
+    if st.button(
+        "Add my changes as suggestions", key="sg_add", type="primary", icon=":material/add_comment:"
+    ):
         new, missing = sg.from_edits(shown, edited, table, reviewer)
         if missing:
-            st.error("Add a rationale for: " + ", ".join(missing))
+            st.error(", ".join(missing), title="Add a rationale for these rows")
         elif not new:
-            st.info("No value changed.")
+            st.info("No value changed.", icon=":material/info:")
         else:
             merged = sg.merge(active(), new)
             if problems := sg.validate(merged, base):
-                st.error("Not added:\n\n" + "\n".join(f"- {p}" for p in problems))
+                st.error("\n".join(f"- {p}" for p in problems), title="Suggestions not added")
             else:
                 st.session_state[KEY] = merged
                 st.rerun()
@@ -102,37 +105,51 @@ def assumptions_tab(base: Catalogue, session: Catalogue, item_share: pd.Series) 
     if current.empty:
         st.caption("None yet. Results on every tab use the catalogue as published.")
     else:
-        st.dataframe(current.drop(columns=["created"]), hide_index=True)
-        c1, c2, c3 = st.columns(3)
-        drop = c1.multiselect("Remove", current["suggestion_id"].tolist(), key="sg_drop")
-        if c1.button("Remove selected", key="sg_remove", disabled=not drop):
+        st.dataframe(
+            current.drop(columns=["created"]),
+            hide_index=True,
+            alt="Suggestions active in this session",
+        )
+        who = "-".join(reviewer.lower().split()) or "reviewer"
+        with st.container(horizontal=True, vertical_alignment="bottom"):
+            drop = st.multiselect(
+                "Remove suggestions", current["suggestion_id"].tolist(), key="sg_drop"
+            )
+            remove = st.button(
+                "Remove selected", key="sg_remove", icon=":material/delete:", disabled=not drop
+            )
+            st.download_button(
+                "Download suggestions (CSV)",
+                current.to_csv(index=False),
+                file_name=f"suggestions-{date.today():%Y%m%d}-{who}.csv",
+                mime="text/csv",
+                key="sg_download",
+                icon=":material/download:",
+                type="primary",
+            )
+            clear = st.button("Clear all", key="sg_clear", icon=":material/delete_sweep:")
+        if remove:
             kept = current[~current["suggestion_id"].isin(drop)].to_dict("records")
             st.session_state[KEY] = sg.merge(
                 sg.empty(), [{k: r[k] for k in sg.COLUMNS[1:]} for r in kept]
             )
             st.rerun()
-        who = "-".join(reviewer.lower().split()) or "reviewer"
-        c2.download_button(
-            "Download suggestions (CSV)",
-            current.to_csv(index=False),
-            file_name=f"suggestions-{date.today():%Y%m%d}-{who}.csv",
-            mime="text/csv",
-            key="sg_download",
-        )
-        if c3.button("Clear all", key="sg_clear"):
+        if clear:
             st.session_state[KEY] = sg.empty()
             st.rerun()
 
-    with st.expander("Load a suggestions file"):
+    with st.expander("Load a suggestions file", icon=":material/upload_file:"):
         upload = st.file_uploader("Suggestions CSV", type="csv", key="sg_upload")
-        if upload is not None and st.button("Load into this session", key="sg_load"):
+        if upload is not None and st.button(
+            "Load into this session", key="sg_load", icon=":material/playlist_add:"
+        ):
             try:
                 loaded = sg.read(upload)
                 merged = sg.merge(active(), loaded[sg.COLUMNS[1:]].to_dict("records"))
                 if problems := sg.validate(merged, base):
-                    st.error("Not loaded:\n\n" + "\n".join(f"- {p}" for p in problems))
+                    st.error("\n".join(f"- {p}" for p in problems), title="Suggestions not loaded")
                 else:
                     st.session_state[KEY] = merged
                     st.rerun()
             except ValueError as e:
-                st.error(str(e))
+                st.error(str(e), title="Cannot read this file")

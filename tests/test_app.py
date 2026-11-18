@@ -8,6 +8,17 @@ pytest.importorskip("streamlit")
 from streamlit.testing.v1 import AppTest
 
 APP = str(Path(__file__).resolve().parents[1] / "app" / "streamlit_app.py")
+TABS = {
+    "results": ":material/insights: Results",
+    "compare": ":material/compare_arrows: Compare scenarios",
+    "method": ":material/menu_book: Method & caveats",
+}
+
+
+def open_tab(at, name):
+    """Tabs track state (on_change="rerun"): select one through its key, then rerun."""
+    at.session_state["main_tabs"] = TABS[name]
+    return at.run()
 
 
 @pytest.fixture
@@ -40,9 +51,9 @@ def test_results_tab_has_charts_and_dropout(app):
 
 
 def test_breakdown_switch_and_tornado(app):
-    app.radio(key="breakdown_by").set_value("country").run()
+    app.segmented_control(key="breakdown_by").set_value("country").run()
     assert not app.exception
-    app.button(key="tornado_button").click().run()
+    app.toggle(key="tornado_on").set_value(True).run()
     assert not app.exception
     assert len(app.get("vega_lite_chart")) >= 4
 
@@ -80,6 +91,7 @@ def test_scenario_comparison(app):
     app.text_input(key="sc_name").input("no DMC").run()
     app.button(key="sc_save").click().run()
     assert not app.exception
+    open_tab(app, "compare")
     labels = [m.label for m in app.metric]
     assert "no DMC: cost P50" in labels
     delta = next(m for m in app.metric if m.label == "no DMC: cost P50").delta
@@ -111,12 +123,19 @@ def test_suggestion_flow(app):
     app.run()
     assert not app.exception
     assert app.metric[0].value != before
-    assert any("reviewer suggestion(s) active" in w.value for w in app.warning)
+    assert any("reviewer suggestion(s) active" in (w.proto.title or "") for w in app.warning)
     assert any(b.label == "Download suggestions (CSV)" for b in app.get("download_button"))
 
 
 def test_method_tab_grade_shares_sum_to_100(app):
+    open_tab(app, "method")
     shares = [m for m in app.metric if m.label[:2] in ("A ", "B ", "C ", "D ")]
     assert len(shares) == 4
     total = sum(float(m.value.rstrip(" %")) for m in shares)
     assert 98 <= total <= 102  # rounding
+
+
+def test_closed_tabs_do_not_compute(app):
+    """Compare and Method bodies only run when open (heavy work guarded by .open)."""
+    assert not any(m.label.endswith("cost P50") for m in app.metric)
+    assert not any(m.label.startswith("D ") for m in app.metric)
