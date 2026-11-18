@@ -10,7 +10,7 @@ from trialcost.distributions import Fixed
 
 #: Deterministic archetype total, EUR. Regression value: update deliberately when
 #: data or methodology changes, and log the change in the README work log.
-GOLDEN_TOTAL = 4_182_179.92
+GOLDEN_TOTAL = 4_249_358.83
 
 
 def line(costs, item, country):
@@ -122,7 +122,7 @@ def test_toggle_does_not_shift_other_draws(design, cat):
     _, on = run_pipeline(design, cat, n_sims=20, seed=3, deterministic=False)
     design.operations.dmc = False
     _, off = run_pipeline(design, cat, n_sims=20, seed=3, deterministic=False)
-    dmc = on.meta["item"].str.startswith("dmc_").to_numpy()
+    dmc = on.meta["item"].isin(["dmc_setup", "dmc_meeting", "interim_dmc_review"]).to_numpy()
     np.testing.assert_allclose(on.values[~dmc], off.values)
 
 
@@ -138,3 +138,78 @@ def test_stochastic_archetype_regression_band(design, cat):
     p50 = np.median(costs.total())
     assert 4.6e6 < p50 < 5.0e6
     assert math.isfinite(costs.total().max())
+
+
+# --- design options (D31) --------------------------------------------------- #
+
+
+def _items(costs):
+    return set(costs.meta["item"])
+
+
+def test_risk_based_monitoring_lines(design, cat):
+    q, costs = run_pipeline(design, cat)
+    assert {"monitoring_visit", "central_monitoring", "rbm_setup", "rbm_extra_queries"} <= _items(
+        costs
+    )
+    assert "monitoring_visit_full_sdv" not in _items(costs)
+    assert line(costs, "central_monitoring", "GLOBAL")[0] == pytest.approx(
+        1_700 * q.conduct_months[0]
+    )
+    assert line(costs, "rbm_extra_queries", "FR")[0] == pytest.approx(
+        260 * q.randomised[0, q.countries.index("FR")]
+    )
+
+
+def test_full_sdv_monitoring_lines(design, cat):
+    design.operations.monitoring = "full_sdv"
+    q, costs = run_pipeline(design, cat)
+    assert "monitoring_visit_full_sdv" in _items(costs)
+    assert not {"monitoring_visit", "central_monitoring", "rbm_setup"} & _items(costs)
+    de = q.countries.index("DE")
+    assert line(costs, "monitoring_visit_full_sdv", "DE")[0] == pytest.approx(
+        2_760 * q.monitoring_visits[0, de]
+    )
+
+
+def test_full_sdv_costs_more_at_same_interval_and_much_more_monthly(design, cat):
+    rbm = _total(design, cat)
+    design.operations.monitoring = "full_sdv"
+    sdv = _total(design, cat)
+    design.operations.monitoring_interval_months = Fixed(value=1.0)
+    sdv_monthly = _total(design, cat)
+    assert rbm < sdv < sdv_monthly
+
+
+def test_interim_analyses(design, cat):
+    _, costs = run_pipeline(design, cat)
+    assert not {"interim_analysis", "interim_dmc_review"} & _items(costs)  # n = 0
+    design.operations.n_interim_analyses = 2
+    _, costs = run_pipeline(design, cat)
+    assert line(costs, "interim_analysis", "GLOBAL")[0] == 2 * 28_000
+    assert line(costs, "interim_dmc_review", "GLOBAL")[0] == 2 * 25_000
+    design.operations.dmc = False
+    _, costs = run_pipeline(design, cat)
+    assert "interim_dmc_review" not in _items(costs)
+
+
+@pytest.mark.parametrize(("model", "factor"), [("functional", 0.80), ("in_house", 0.59)])
+def test_sponsor_model_scales_cro_labour_only(design, cat, model, factor):
+    _, full = run_pipeline(design, cat)
+    design.operations.sponsor_model = model
+    _, other = run_pipeline(design, cat)
+    for item, country in [
+        ("project_management", "GLOBAL"),
+        ("monitoring_visit", "DE"),
+        ("medical_monitoring", "GLOBAL"),
+    ]:
+        assert line(other, item, country)[0] == pytest.approx(factor * line(full, item, country)[0])
+    for item, country in [
+        ("edc_build_licence", "GLOBAL"),  # software vendor
+        ("irb_local", "US"),  # fee
+        ("investigator_fee", "FR"),  # site payment
+        ("mri_brain", "US"),  # procedure
+        ("drug_supply", "GLOBAL"),  # supply chain vendor
+    ]:
+        assert line(other, item, country)[0] == pytest.approx(line(full, item, country)[0])
+    assert other.total()[0] < full.total()[0]

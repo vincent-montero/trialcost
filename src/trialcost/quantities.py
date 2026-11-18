@@ -18,7 +18,9 @@ Rules (README §2, CLAUDE.md)
 - Time: ``T_LPLV = T_LPI + patient duration``, ``T_total = T_LPLV + close-out``.
 - Site ``i`` is active from its activation to LPLV: site-months
   ``= sum_i max(0, T_LPLV - a_i)``; monitoring visits = site-months / interval.
-- DMC meetings (D27) = ceil((T_LPLV - first activation) / DMC interval).
+- Conduct window = T_LPLV - first site activation (D27); DMC meetings =
+  ceil(conduct window / DMC interval); central monitoring is per conduct month.
+- Interim analyses = ``operations.n_interim_analyses``.
 - Scans = occurrences of procedures whose category is ``imaging``.
 """
 
@@ -91,7 +93,9 @@ class Quantities:
     scans: np.ndarray  # (n_sims, n_c)
     site_months: np.ndarray  # (n_sims, n_c) active site-months up to LPLV
     monitoring_visits: np.ndarray  # (n_sims, n_c)
+    conduct_months: np.ndarray  # (n_sims,) first activation -> LPLV
     dmc_meetings: np.ndarray  # (n_sims,)
+    n_interim_analyses: int
     raters: np.ndarray  # (n_c,)
 
     @property
@@ -106,6 +110,8 @@ class Quantities:
             "per_study": np.ones(n_sims),
             "per_month": self.t_total,
             "per_meeting": self.dmc_meetings,
+            "per_conduct_month": self.conduct_months,
+            "per_interim_analysis": np.full(n_sims, float(self.n_interim_analyses)),
             "per_country": per_country,
             "per_site": per_country * self.n_sites,
             "per_site_month": self.site_months,
@@ -174,7 +180,7 @@ def compute_quantities(
     site_months = active @ to_country
     n_sites = np.array([c.n_sites for c in design.countries], dtype=float)
 
-    window = t_lplv - recruitment.activation.min(axis=1)
+    conduct = t_lplv - recruitment.activation.min(axis=1)
     return Quantities(
         countries=tuple(c.country for c in design.countries),
         n_sites=n_sites,
@@ -191,6 +197,8 @@ def compute_quantities(
         scans=scans,
         site_months=site_months,
         monitoring_visits=site_months / monitoring_interval[:, None],
-        dmc_meetings=np.ceil(window / dmc_interval),
+        conduct_months=conduct,
+        dmc_meetings=np.ceil(conduct / dmc_interval),
+        n_interim_analyses=ops.n_interim_analyses,
         raters=n_sites * raters_per_site,
     )

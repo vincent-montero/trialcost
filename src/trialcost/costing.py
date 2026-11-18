@@ -8,6 +8,9 @@ Unit price of a site procedure in country ``c`` (D16, D25)::
 
 Study items follow the same ``country_scaling`` rule (D23), multiplied by the
 quantity of their driver; country fees (CTA) come from ``countries.csv``.
+Under a ``functional`` or ``in_house`` sponsor model, study items delivered by
+CRO labour (``country_scaling = none`` and resource listed in
+``sponsor_model_factors.csv``) are multiplied by that model's factor (D31).
 
 Random draws and their sharing
 ------------------------------
@@ -125,6 +128,7 @@ def compute_costs(
     proc_price = _draw_rows(catalogue.procedures, rng, n_sims, deterministic)
     item_price = _draw_rows(catalogue.study_items, rng, n_sims, deterministic)
     override_price = _draw_rows(catalogue.overrides, rng, n_sims, deterministic)
+    sponsor_factor_draws = _draw_rows(catalogue.sponsor_factors, rng, n_sims, deterministic)
     cta_fee = np.column_stack(
         [
             draw(catalogue.country_range(c, "cta_fee_eur"), rng, n_sims, deterministic)
@@ -163,18 +167,26 @@ def compute_costs(
 
     # --- study items ---
     items = catalogue.study_items
+    model = design.operations.sponsor_model
+    labour = catalogue.sponsor_model_factor(model)
+
+    def sponsor_factor(row) -> np.ndarray | float:
+        if labour and row.country_scaling == "none" and row.resource in labour.resources:
+            return sponsor_factor_draws[model]
+        return 1.0
+
     for item_id, cond in catalogue.conditions.items():
         row = items.loc[item_id]
         qty = q.driver(row.driver)
         if row.driver in STUDY_LEVEL_DRIVERS:
-            if cond.holds(design):
-                value = item_price[item_id] * qty
+            if cond.holds(design) and np.any(qty):
+                value = item_price[item_id] * qty * sponsor_factor(row)
                 add(item_id, "study_item", GLOBAL, row.category, row.resource, row.driver, value)
             continue
         for k, c in enumerate(countries):
             if not cond.holds(design, c):
                 continue
-            unit = item_price[item_id]
+            unit = item_price[item_id] * sponsor_factor(row)
             if row.country_scaling == "site_price":
                 unit = unit * site_scale[:, k]
             add(item_id, "study_item", c, row.category, row.resource, row.driver, unit * qty[:, k])

@@ -16,6 +16,7 @@ The CSVs are the only source of numbers. This module:
     atom      := "always"
                | "country==" CC           # CC = ISO 3166 alpha-2, e.g. FR
                | "operations." FLAG       # a boolean field of design.Operations
+               | "operations." FIELD "==" VALUE   # a choice field, e.g. monitoring==full_sdv
                | "uses:" PROCEDURE_ID     # some visit of the design uses it
 
 A ``country==`` atom only makes sense for items whose driver lives in a
@@ -27,6 +28,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal, get_args, get_origin
 
 import pandas as pd
 
@@ -54,10 +56,14 @@ DRIVERS = frozenset(
         "per_monitoring_visit",
         "per_meeting",
         "per_rater",
+        "per_conduct_month",
+        "per_interim_analysis",
     }
 )
 #: Drivers with no country attached: a ``country==`` condition is meaningless.
-STUDY_LEVEL_DRIVERS = frozenset({"per_study", "per_month", "per_meeting"})
+STUDY_LEVEL_DRIVERS = frozenset(
+    {"per_study", "per_month", "per_meeting", "per_conduct_month", "per_interim_analysis"}
+)
 
 #: Procedures added automatically to every on-site visit (CLAUDE.md).
 AUTO_ONSITE_PROCEDURES = ("coordinator_visit", "logistics_visit", "vital_signs")
@@ -96,11 +102,20 @@ OVERRIDE_COLUMNS = [
     "procedure_id", "country", "low", "mode", "high", "apply_overhead",
     "evidence", "source", "notes",
 ]  # fmt: skip
+SPONSOR_FACTOR_COLUMNS = [
+    "sponsor_model", "resources", "low", "mode", "high", "evidence", "source", "notes",
+]  # fmt: skip
 BENCHMARK_COLUMNS = ["benchmark_id", "description", "value", "unit", "price_year", "source"]
 
 _OPERATION_FLAGS = frozenset(
     name for name, f in Operations.model_fields.items() if f.annotation is bool
 )
+#: Choice fields of Operations and their allowed values, e.g. monitoring -> {full_sdv, ...}.
+_OPERATION_CHOICES = {
+    name: frozenset(get_args(f.annotation))
+    for name, f in Operations.model_fields.items()
+    if get_origin(f.annotation) is Literal
+}
 
 
 class CatalogueError(ValueError):
@@ -143,6 +158,15 @@ class OperationsFlag:
 
 
 @dataclass(frozen=True)
+class OperationsEquals:
+    field: str
+    value: str
+
+    def holds(self, design: Design, country: str | None) -> bool:
+        return getattr(design.operations, self.field) == self.value
+
+
+@dataclass(frozen=True)
 class UsesProcedure:
     procedure_id: str
 
@@ -150,11 +174,12 @@ class UsesProcedure:
         return any(self.procedure_id in v.procedures for v in design.visits)
 
 
-Atom = Always | CountryIs | OperationsFlag | UsesProcedure
+Atom = Always | CountryIs | OperationsFlag | OperationsEquals | UsesProcedure
 
 _ATOM_PATTERNS: list[tuple[re.Pattern[str], type]] = [
     (re.compile(r"always"), Always),
     (re.compile(r"country==([A-Z]{2})"), CountryIs),
+    (re.compile(r"operations\.([a-z_]+)==([a-z_]+)"), OperationsEquals),
     (re.compile(r"operations\.([a-z_]+)"), OperationsFlag),
     (re.compile(r"uses:([a-z0-9_]+)"), UsesProcedure),
 ]
@@ -193,10 +218,19 @@ def parse_condition(text: str) -> Condition:
                 break
         else:
             raise ValueError(f"cannot parse condition atom {part!r} in {text!r}")
-        if isinstance(atoms[-1], OperationsFlag) and atoms[-1].flag not in _OPERATION_FLAGS:
+        atom = atoms[-1]
+        if isinstance(atom, OperationsFlag) and atom.flag not in _OPERATION_FLAGS:
             raise ValueError(
-                f"unknown operations flag {atoms[-1].flag!r}; known: {sorted(_OPERATION_FLAGS)}"
+                f"unknown operations flag {atom.flag!r}; known: {sorted(_OPERATION_FLAGS)}"
             )
+        if isinstance(atom, OperationsEquals):
+            allowed = _OPERATION_CHOICES.get(atom.field)
+            if allowed is None:
+                raise ValueError(f"operations.{atom.field} is not a choice field")
+            if atom.value not in allowed:
+                raise ValueError(
+                    f"operations.{atom.field} cannot be {atom.value!r}; allowed: {sorted(allowed)}"
+                )
     return Condition(text=text, atoms=tuple(atoms))
 
 
@@ -293,6 +327,18 @@ class ProcedureOverride:
 
 
 @dataclass(frozen=True)
+class SponsorModelFactor:
+    """Multiplier on CRO-delivered labour for a sponsor model (D31).
+
+    Applies to study items with ``country_scaling == none`` whose resource is
+    in ``resources``. ``full_cro`` has no row: factor 1.
+    """
+
+    factor: Triangular
+    resources: frozenset[str]
+
+
+@dataclass(frozen=True)
 class Catalogue:
     """Validated catalogue. DataFrames are indexed by their ID column."""
 
@@ -302,6 +348,7 @@ class Catalogue:
     constants: pd.DataFrame
     benchmarks: pd.DataFrame
     overrides: pd.DataFrame  # indexed by (procedure_id, country)
+    sponsor_factors: pd.DataFrame  # indexed by sponsor_model
     conditions: dict[str, Condition]  # item_id -> parsed applies_if
 
     @staticmethod
@@ -324,6 +371,15 @@ class Catalogue:
         row = self.overrides.loc[key]
         return ProcedureOverride(
             price=self._triangular(row), apply_overhead=bool(row["apply_overhead"])
+        )
+
+    def sponsor_model_factor(self, sponsor_model: str) -> SponsorModelFactor | None:
+        """Labour multiplier for a sponsor model, or ``None`` (factor 1)."""
+        if sponsor_model not in self.sponsor_factors.index:
+            return None
+        row = self.sponsor_factors.loc[sponsor_model]
+        return SponsorModelFactor(
+            factor=self._triangular(row), resources=frozenset(row["resources"].split(";"))
         )
 
     def item_price(self, item_id: str) -> Triangular:
@@ -380,6 +436,7 @@ def _validate(
     constants: pd.DataFrame,
     benchmarks: pd.DataFrame,
     procedure_overrides: pd.DataFrame,
+    sponsor_model_factors: pd.DataFrame,
 ) -> tuple[list[str], dict[str, Condition]]:
     problems: list[str] = []
     conditions: dict[str, Condition] = {}
@@ -468,6 +525,26 @@ def _validate(
                 o.append(f"{tag}: apply_overhead must be true/false, got {r.apply_overhead!r}")
     problems += o
 
+    # sponsor_model_factors.csv
+    f = _check_common(
+        sponsor_model_factors, SPONSOR_FACTOR_COLUMNS, "sponsor_model", "sponsor_model_factors"
+    )
+    if not f:
+        f += _check_range(sponsor_model_factors, "sponsor_model", "sponsor_model_factors")
+        f += _check_allowed(
+            sponsor_model_factors,
+            "sponsor_model",
+            "sponsor_model",
+            _OPERATION_CHOICES["sponsor_model"],
+            "sponsor_model_factors",
+        )
+        known_resources = set(study_items.get("resource", []))
+        for _, r in sponsor_model_factors.iterrows():
+            for res in str(r.resources).split(";"):
+                if res not in known_resources:
+                    f.append(f"sponsor_model_factors: {r.sponsor_model}: unknown resource {res!r}")
+    problems += f
+
     # benchmarks.csv (validation only; no evidence grade)
     b = _check_common(benchmarks, BENCHMARK_COLUMNS, "benchmark_id", "benchmarks", graded=False)
     if not b:
@@ -490,6 +567,7 @@ def load_catalogue(data_dir: str | Path = DATA_DIR) -> Catalogue:
             "constants",
             "benchmarks",
             "procedure_overrides",
+            "sponsor_model_factors",
         )
     }
     problems, conditions = _validate(**tables)
@@ -502,5 +580,6 @@ def load_catalogue(data_dir: str | Path = DATA_DIR) -> Catalogue:
         constants=tables["constants"].set_index("constant_id"),
         benchmarks=tables["benchmarks"].set_index("benchmark_id"),
         overrides=tables["procedure_overrides"].set_index(["procedure_id", "country"]),
+        sponsor_factors=tables["sponsor_model_factors"].set_index("sponsor_model"),
         conditions=conditions,
     )

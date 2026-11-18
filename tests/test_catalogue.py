@@ -12,6 +12,7 @@ from trialcost.catalogue import (
     Always,
     CatalogueError,
     CountryIs,
+    OperationsEquals,
     OperationsFlag,
     UsesProcedure,
     load_catalogue,
@@ -39,7 +40,7 @@ def design():
 
 def test_real_catalogue_loads(cat):
     assert len(cat.procedures) == 20
-    assert len(cat.study_items) == 39
+    assert len(cat.study_items) == 45
     assert set(cat.countries.index) == {"FR", "DE", "ES", "IT", "NL", "US"}
 
 
@@ -88,6 +89,20 @@ def test_procedure_override(cat):
     assert cat.procedure_override("ecg", "US") is None
 
 
+def test_operations_equals_semantics(design):
+    cond = parse_condition("operations.monitoring==risk_based")
+    assert cond.holds(design)
+    design.operations.monitoring = "full_sdv"
+    assert not cond.holds(design)
+
+
+def test_sponsor_model_factor(cat):
+    assert cat.sponsor_model_factor("full_cro") is None
+    fsp = cat.sponsor_model_factor("functional")
+    assert fsp.factor.mode == 0.80 and "cra" in fsp.resources
+    assert cat.sponsor_model_factor("in_house").factor.mode == 0.59
+
+
 def test_activation_defaults_to_catalogue(cat, design):
     assert cat.activation_months(design, "IT") == Triangular(low=5, mode=8, high=12)
     design.countries[0].activation_months = Fixed(value=2.0)
@@ -104,6 +119,7 @@ def test_activation_defaults_to_catalogue(cat, design):
         ("country==FR", (CountryIs("FR"),)),
         ("operations.irt", (OperationsFlag("irt"),)),
         ("uses:scale_pro", (UsesProcedure("scale_pro"),)),
+        ("operations.monitoring==full_sdv", (OperationsEquals("monitoring", "full_sdv"),)),
         (
             "operations.central_imaging_reading and country==FR",
             (OperationsFlag("central_imaging_reading"), CountryIs("FR")),
@@ -123,6 +139,9 @@ def test_parse_condition(text, atoms):
         "country=FR",
         "operations.monitoring",  # not a boolean flag
         "operations.unknown_flag",
+        "operations.monitoring==weekly",  # not an allowed value
+        "operations.dmc==true",  # boolean flag, not a choice field
+        "operations.n_interim_analyses==2",
         "always or country==FR",
         "__import__('os')",
     ],
@@ -221,6 +240,8 @@ def drop_column(col: str):
         ("countries", set_cell(1, "country", "Germany"), "bad country code"),
         ("constants", drop_row(0), "required constant"),
         ("procedure_overrides", set_cell(0, "procedure_id", "nope"), "unknown procedure"),
+        ("sponsor_model_factors", set_cell(0, "sponsor_model", "outsourced"), "sponsor_model"),
+        ("sponsor_model_factors", set_cell(0, "resources", "cra;wizard"), "unknown resource"),
         ("procedure_overrides", set_cell(0, "country", "ZZ"), "unknown country"),
         ("procedure_overrides", set_cell(0, "apply_overhead", "maybe"), "apply_overhead"),
         ("procedure_overrides", set_cell(0, "low", 5000), "low <= mode <= high"),

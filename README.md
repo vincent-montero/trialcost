@@ -117,11 +117,27 @@ What each `study_items.csv` driver multiplies the unit price by, per simulation:
 | `per_scan` | occurrences of `imaging`-category procedures (dropout-adjusted) | country |
 | `per_monitoring_visit` | site-months / monitoring interval | country |
 | `per_rater` | raters per site × sites | country |
+| `per_conduct_month` | conduct window = T_LPLV − first activation (D27) | study |
+| `per_interim_analysis` | `operations.n_interim_analyses` | study |
 
 - Procedures: expected occurrences = Σ visits (patients attending × times listed), plus the automatic on-site procedures once per on-site visit.
 - Unit price in country c: override → override (× (1 + overhead) if `apply_overhead`); `site_price` → FR price × index_c × (1 + overhead_c); `none` → FR price. Same `country_scaling` rule for study items (D23). CTA fees per country from `countries.csv`.
 - Draw sharing: country index and overhead drawn once per simulation and shared by all lines of that country; each catalogue price drawn once per simulation and shared across countries; all catalogue rows drawn in file order on every run (common random numbers across scenarios, D29).
 - Output: `CostLines` = metadata table (item, source, country, category, resource, driver) + `(n_lines, n_sims)` cost array; any breakdown is a groupby on the metadata; `to_frame()` gives the tidy long table (D28).
+
+### 2.9 Operational options (D31)
+
+| Option | What changes in the cost | Evidence |
+|---|---|---|
+| `monitoring: risk_based` (default) | `monitoring_visit` (targeted SDV, ~12 h CRA) + `central_monitoring` per conduct month (8/16/32 h) + `rbm_setup` (40/80/160 h) + `rbm_extra_queries` per patient (0.5/2.4/4 h) | Extra queries: MONITORING study (Fougerou-Leurent 2019) 2.4 h per participant; hours otherwise assumptions × CRA bill rate |
+| `monitoring: full_sdv` | `monitoring_visit_full_sdv` instead: CRA time per visit × 1.17/1.35/1.49, travel unchanged | ADAMON (Brosteanu 2017): on-site time ratio / visit ratio, extensive vs risk-based |
+| `monitoring_interval_months` | visit **frequency**, for both strategies; strategy does not change it | ADAMON: 1.8–3.5× more visits per participant with extensive on-site monitoring, so a full-SDV design should normally set a shorter interval |
+| `sponsor_model: functional` / `in_house` | CRO-delivered labour items (`country_scaling = none`, resource in the factor file) × 0.65/0.80/0.95 (FSP) or 0.42/0.59/0.93 (in-house); vendors, fees, site payments and procedures unchanged | FSP: analyst / vendor claims only (D). In-house: fully burdened cost 1.25–1.40 × salary ÷ CRO multiplier 2.5–3.5 ÷ utilisation 0.60–0.85 (C) |
+| `n_interim_analyses` | per interim: `interim_analysis` (data cut + independent statistician) and, if DMC, `interim_dmc_review` (extra meeting) | Fractions of `db_lock` / `biostatistics`, DMC meeting price (C/D); no public price found |
+
+Deterministic impact on the archetype (base €4.249M, risk-based, full CRO): full SDV at the same 2-month interval +€43k (+1.0 %); full SDV monthly +€663k (+15.6 %, on-site monitoring ≈ 2.2× risk-based, vs 2.7–3.4× in OPTIMON); FSP −€509k (−12 %); in-house −€1.04M (−24.5 %); 2 interim analyses +€106k (+2.5 %).
+
+`applies_if` also accepts `operations.<choice field>==<value>` (e.g. `operations.monitoring==full_sdv`), validated against the allowed values in the schema.
 
 ---
 
@@ -225,9 +241,10 @@ Files in `data/` (EUR, price year 2026):
 | File | Content |
 |---|---|
 | `procedures.csv` | 20 per-occurrence site procedures (France reference) |
-| `study_items.csv` | 39 study-, country-, site-, time- and patient-driven items |
+| `study_items.csv` | 45 study-, country-, site-, time- and patient-driven items |
 | `countries.csv` | 6 countries: site price index, overhead, labour cost, CTA fees, activation delays |
 | `benchmarks.csv` | 9 published benchmarks, used for validation only |
+| `sponsor_model_factors.csv` | Multipliers on CRO-delivered labour for `functional` (FSP) and `in_house` sponsor models (D31) |
 | `procedure_overrides.csv` | Country-specific procedure prices replacing *FR price × site index* (1 row: US brain MRI) |
 | `constants.csv` | 4 engine-level parameters (FX rate, close-out months, raters per site, DMC meeting interval), same `low/mode/high` + grade columns |
 
@@ -237,8 +254,8 @@ Files in `data/` (EUR, price year 2026):
 |---|---|---|---|
 | **A** sourced | Read directly from an official tariff or regulation | 12 | 4 |
 | **B** secondary | Aggregator / planning guide citing industry data | 0 | 10 |
-| **C** derived | Computed from sourced inputs + a stated assumption | 4 | 4 |
-| **D** assumption | Expert-judgement placeholder, to be reviewed | 4 | 21 |
+| **C** derived | Computed from sourced inputs + a stated assumption | 4 | 6 (+3 mixed C/D) |
+| **D** assumption | Expert-judgement placeholder, to be reviewed | 4 | 22 |
 
 Rule agreed with Vincent: **assumptions and derivations are acceptable as long as they are transparent and traceable** (each row has `evidence`, `source`, `notes`).
 
@@ -278,6 +295,7 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D28 | Cost lines stored as **metadata table + `(n_lines, n_sims)` array**, tidy long table on demand | Breakdowns stay a groupby while 10k sims × ~200 lines remain fast (full pipeline ≈ 45 ms) |
 | D29 | **Common random numbers**: every catalogue row drawn on every run in file order; country factors shared within a country, prices shared across countries | Toggling an option changes only the lines it affects (tested), needed for the Δ-vs-no-dropout report and for a clean tornado |
 | D30 | **Labels reworded** to match their drivers (`edc_hosting`: whole duration; `pharmacy_annual`: every active site-year) rather than adding offsets; `resource` corrected for software / fee items (`edc_build_licence`, `edc_hosting` → `it_vendor`; `irb_local` → `authority_fee`) | Vincent's choice; small overlaps documented in §6 #16. Resource fix keeps the resource breakdown honest and keeps software / fees out of the sponsor-model labour factors |
+| D31 | **Operational options now drive cost** (§2.9): monitoring strategy selects risk-based items (central monitoring, set-up, extra queries) or longer full-SDV visits, frequency stays `monitoring_interval_months`; sponsor model multiplies CRO-delivered labour via `sponsor_model_factors.csv`; interim analyses add analysis + DMC review items. New drivers `per_conduct_month`, `per_interim_analysis`; `applies_if` gains `operations.<field>==<value>` | Vincent asked for the options to be costed from public evidence. Frequency kept separate from strategy so the two effects are not counted twice. In-house counts sponsor staff (otherwise the work would vanish); full CRO / FSP exclude sponsor oversight (§1) |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -303,7 +321,7 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 14. **Excluded**: IMP manufacturing, sponsor internal staff, VAT, inflation indexing, explicit CRO margin (embedded in rates).
 15. **Beta concentration κ = 20** for screen-failure and dropout rates in the archetype (SD ≈ 0.10 and 0.08), inherited from the prototype. Placeholder until ClinicalTrials.gov priors.
 16. **Driver vs label overlaps (accepted, D30)**: `edc_hosting` is charged over the whole study, so it may overlap the year-1 licence in `edc_build_licence` (≤ ~€18k at mode); `pharmacy_annual` counts every active site-year, so FR year 1 overlaps `site_fixed_fees_fr` (≤ ~€500 per FR site). Labels reworded to say what is counted.
-17. **Operations fields not costed yet**: `sponsor_model`, `monitoring` (full SDV vs risk-based) and `n_interim_analyses` are accepted in the design but no catalogue item depends on them in v0.
+17. **Operational options (D31, §2.9)**: risk-based hours (central monitoring 8/16/32 h per conduct month, set-up 40/80/160 h) are assumptions; full-SDV visit length ratio 1.17–1.49 from ADAMON; FSP factor 0.65/0.80/0.95 rests on analyst/vendor claims only (weakest number of the set); in-house factor depends on §6 #1 (CRO multiplier) and an assumed utilisation 0.60–0.85; interim analysis = 40 % of `db_lock` + 20 % of `biostatistics` (assumed fractions); the site's own monitoring fee does not grow with longer full-SDV visits.
 18. **All planned sites cost start-up and close-out**, even when a simulated site recruits nobody (late activation); site-months still stop at LPLV.
 
 ---
@@ -380,6 +398,16 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 - [benchmark] Clinical Leader (2026), per-patient cost analytics (Tufts cost per day) — https://www.clinicalleader.com/doc/clinical-trial-per-patient-cost-analytics-for-procurement-and-sponsor-strategy-0001
 - [C] Lille ILIS master's thesis (2021), costs of academic French trials (insurance, DM, statistics) — https://pepite-depot.univ-lille.fr/LIBRE/Mem_ILIS/2021/LILU_SMIS_2021_022.pdf
 
+### Monitoring strategies and operating models (D31)
+- [C] Klatte K et al. (2021), Monitoring strategies for clinical intervention studies, Cochrane Database Syst Rev MR000051 (ADAMON, OPTIMON, MONITORING, START resource results) — https://discovery.ucl.ac.uk/id/eprint/10140800/1/Klatte_et_al-2021-Cochrane_Database_of_Systematic_Reviews.pdf
+- [context] TransCelerate, Risk-based monitoring initiative — https://www.transceleratebiopharmainc.com/initiatives/risk-based-monitoring/
+- [context] IntuitionLabs, FSP vs full-service CRO models (PPD FSP case study, operating costs down 20 %+) — https://intuitionlabs.ai/articles/fsp-vs-full-service-cro-model
+- [context] Clinical Leader, The role of the CRO is changing (Deutsche Bank: 20–30 % first-year savings, FSP vs insourcing) — https://www.clinicalleader.com/doc/the-role-of-the-cro-is-changing-why-0001
+- [context] Pharmaceutical Technology, sponsored interview (KPS: up to 40 % below full-service; vendor claim) — https://www.pharmaceutical-technology.com/sponsored/outsourcing-trends-in-clinical-trials-how-one-company-is-reimagining-the-fsp-model/
+- [C] HiBob, Fully burdened labor rate (1.25–1.4 × salary rule of thumb) — https://www.hibob.com/financial-metrics/fully-burdened-labor-rate/
+- [C] Payoneer, Labor burden guide 2026 — https://www.payoneer.com/resources/workforce-management/hr-and-compliance/labor-burden/
+- [searched, nothing usable] Public price of an interim analysis / unscheduled DMC review (Nov 2026)
+
 ### Operational cost aggregators (secondary)
 - [B] IntuitionLabs, Clinical trial start-up costs (Tufts, ClinicalTrialZone, PharmExec figures) — https://www.intuitionlabs.ai/articles/clinical-trial-start-up-costs
 - [B] IntuitionLabs, EDC software pricing 2026 (ClinCapture ranges) — https://intuitionlabs.ai/articles/edc-software-pricing-2026
@@ -415,6 +443,13 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Label rewording (D30) and costed operational options (D31)
+- Done: `study_items.csv`: `edc_hosting` and `pharmacy_annual` labels reworded, `resource` fixed for EDC (→ `it_vendor`) and `irb_local` (→ `authority_fee`); 6 new items (`monitoring_visit_full_sdv`, `central_monitoring`, `rbm_setup`, `rbm_extra_queries`, `interim_analysis`, `interim_dmc_review`), `monitoring_visit` now conditional on risk-based monitoring; new `data/sponsor_model_factors.csv`. Code: `applies_if` supports `operations.<field>==<value>`; drivers `per_conduct_month`, `per_interim_analysis`; sponsor-model factor in `costing.py`; study-level lines with zero quantity dropped. 14 new tests (146 pass). Literature search: Cochrane review of monitoring strategies (ADAMON, OPTIMON, MONITORING), FSP / insourcing claims, burdened labour cost; nothing public on interim-analysis prices.
+- Decisions: D30, D31.
+- Assumptions: §6 #16 and #17 rewritten.
+- Results: deterministic archetype €4,182,180 → **€4,249,359** (+€67k: central monitoring, risk-based set-up and extra queries now costed). Option impacts in §2.9.
+- Next: step 6. Question for Vincent: should `monitoring_interval_months` default to a strategy-specific value (e.g. 1 month for full SDV) instead of 2.0 for both? That is a schema change.
 
 ### 2026-11-18 — Engine step 5: quantities and costing
 - Done: `src/trialcost/quantities.py` (SF, dropout hazard and visit attendance, automatic on-site procedures, procedure counts as visit × incidence matrix product, scans, site-months, monitoring visits, DMC meetings, `Quantities.driver()`); `src/trialcost/costing.py` (country factors, procedure / override / study-item / CTA pricing, `CostLines` with `total()`, `by()`, `select()`, `to_frame()`); `catalogue.py` rejects `site_price` on study-level items; `tests/conftest.py` (shared pipeline helper), `tests/test_quantities.py`, `tests/test_costing.py` (golden deterministic total, hand-checked lines, breakdown consistency, invariants, common-random-numbers check, timing, P50 regression band). 132 tests pass. Methodology written up in §2.8.
