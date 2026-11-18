@@ -14,6 +14,7 @@ import charts
 import numpy as np
 import pandas as pd
 import streamlit as st
+from design_editor import design_editor
 
 from trialcost import report
 from trialcost.catalogue import Catalogue, load_catalogue
@@ -79,7 +80,7 @@ def quantiles(x: np.ndarray) -> tuple[float, float, float]:
 # --------------------------------------------------------------------------- #
 
 
-def sidebar() -> tuple[Design, int, int, float | None]:
+def sidebar() -> tuple[Design, str, int, int, float | None]:
     st.sidebar.header("Design")
     files = design_files()
     name = st.sidebar.selectbox(
@@ -94,7 +95,7 @@ def sidebar() -> tuple[Design, int, int, float | None]:
     budget = st.sidebar.number_input(
         "Budget to test (€, 0 = none)", min_value=0.0, value=0.0, step=250_000.0, format="%.0f"
     )
-    return design, int(n_sims), int(seed), (budget or None)
+    return design, name, int(n_sims), int(seed), (budget or None)
 
 
 def headline(result: SimulationResult, budget: float | None) -> None:
@@ -182,11 +183,17 @@ def main() -> None:
         "public data only. Many unit costs are expert-judgement placeholders: read results as "
         "orders of magnitude with honest uncertainty, not quotes."
     )
-    design, n_sims, seed, budget = sidebar()
+    base, base_name, n_sims, seed, budget = sidebar()
+    header = st.container()  # filled after the editor has run
+    tab_results, tab_design = st.tabs(["Results", "Design"])
+    with tab_design:
+        design = design_editor(base, base_name, base_catalogue())
     design_json = design.model_dump_json()
     result = simulate(design_json, n_sims, seed)
-    headline(result, budget)
-    (tab_results,) = st.tabs(["Results"])
+    with header:
+        headline(result, budget)
+        if design != base:
+            st.caption(f"Edited from `{base_name}` (see the Design tab).")
     with tab_results:
         results_tab(result, design_json, n_sims, seed)
 
