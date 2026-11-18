@@ -277,6 +277,7 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D27 | **DMC meetings over the conduct window = first site activation → LPLV**; number of meetings = ⌈window / `dmc_meeting_interval_months`⌉ | DMCs review accrued data during conduct, not only during one patient's treatment period. First activation slightly precedes first patient in (archetype: by ~0.4 month on average), well under one meeting; ceiling counts the partial final period as a meeting |
 | D28 | Cost lines stored as **metadata table + `(n_lines, n_sims)` array**, tidy long table on demand | Breakdowns stay a groupby while 10k sims × ~200 lines remain fast (full pipeline ≈ 45 ms) |
 | D29 | **Common random numbers**: every catalogue row drawn on every run in file order; country factors shared within a country, prices shared across countries | Toggling an option changes only the lines it affects (tested), needed for the Δ-vs-no-dropout report and for a clean tornado |
+| D30 | **Labels reworded** to match their drivers (`edc_hosting`: whole duration; `pharmacy_annual`: every active site-year) rather than adding offsets; `resource` corrected for software / fee items (`edc_build_licence`, `edc_hosting` → `it_vendor`; `irb_local` → `authority_fee`) | Vincent's choice; small overlaps documented in §6 #16. Resource fix keeps the resource breakdown honest and keeps software / fees out of the sponsor-model labour factors |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -301,7 +302,7 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 13. **Italy**: labour cost, fees and site index not verified.
 14. **Excluded**: IMP manufacturing, sponsor internal staff, VAT, inflation indexing, explicit CRO margin (embedded in rates).
 15. **Beta concentration κ = 20** for screen-failure and dropout rates in the archetype (SD ≈ 0.10 and 0.08), inherited from the prototype. Placeholder until ClinicalTrials.gov priors.
-16. **Driver vs label mismatches (small, to fix in data)**: `edc_hosting` says "after year 1" but `per_month` charges it over all of T_total (~ +€18k at the mode); `pharmacy_annual` says "per additional year" but `per_site_year` counts every site-year (~ +€7–10k). Options: shift the labels, or add a 12-month offset to these two items.
+16. **Driver vs label overlaps (accepted, D30)**: `edc_hosting` is charged over the whole study, so it may overlap the year-1 licence in `edc_build_licence` (≤ ~€18k at mode); `pharmacy_annual` counts every active site-year, so FR year 1 overlaps `site_fixed_fees_fr` (≤ ~€500 per FR site). Labels reworded to say what is counted.
 17. **Operations fields not costed yet**: `sponsor_model`, `monitoring` (full SDV vs risk-based) and `n_interim_analyses` are accepted in the design but no catalogue item depends on them in v0.
 18. **All planned sites cost start-up and close-out**, even when a simulated site recruits nobody (late activation); site-months still stop at LPLV.
 
