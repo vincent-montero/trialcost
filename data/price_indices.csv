@@ -1,0 +1,6 @@
+index_id,year,value,evidence,source,notes
+us_cpi_medical_care,2015,446.752,A,"BLS CPI-U Medical Care, U.S. city average (CUUS0000SAM, 1982-84=100) via FRED",Mean of H1 444.653 and H2 448.851
+us_cpi_medical_care,2016,463.675,A,"BLS CPI-U Medical Care, U.S. city average (CUUS0000SAM, 1982-84=100) via FRED",Mean of H1 459.065 and H2 468.285
+us_cpi_medical_care,2018,484.707,A,"BLS CPI-U Medical Care, U.S. city average (CUUS0000SAM, 1982-84=100) via FRED",Mean of H1 483.808 and H2 485.606
+us_cpi_medical_care,2024,563.841,A,"BLS CPI-U Medical Care, U.S. city average (CUUS0000SAM, 1982-84=100) via FRED",Mean of H1 560.925 and H2 566.757
+us_cpi_medical_care,2026,592.116,A,"BLS CPI-U Medical Care, U.S. city average (CUUS0000SAM, 1982-84=100) via FRED","H1 2026, latest available on 2026-11-18 (stands in for the 2026 price year)"

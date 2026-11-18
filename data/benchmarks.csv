@@ -8,3 +8,7 @@ moore_pivotal_ppv,Median pivotal trial cost per patient-visit,3562,USD/patient-v
 moore_min_orphan,Uncontrolled orphan trials (<15 patients),5000000.0,USD/trial,2015-16 trials,Moore et al. 2018 (via Global Genes)
 martin_ph2_median,Median phase II trial cost,8600000.0,USD/trial,2010-15 trials,Martin et al. Nat Rev Drug Discov 2017 (via Nat Rev Drug Discov 2018 news)
 tufts_ph2_day,"Direct cost per day, phase 2",23737,USD/day,2024,Tufts CSDD 2024 (via Clinical Leader 2026)
+moore_small_mean,"Mean pivotal trial cost, trials with <=100 patients",5900000.0,USD/trial,2015-16 trials,Moore et al. 2018 (via AJMC)
+aspe_cns_ph2_duration,"Phase duration, CNS, phase 2",40.1,months,n/a,"ASPE 2024, Table 2"
+aspe_all_ph2_duration,"Phase duration, all areas, phase 2",34.0,months,n/a,"ASPE 2024, Table 2"
+aspe_cns_ph3_duration,"Phase duration, CNS, phase 3",45.3,months,n/a,"ASPE 2024, Table 2"

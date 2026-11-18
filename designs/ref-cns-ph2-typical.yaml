@@ -1,0 +1,77 @@
+# Reference design for benchmark validation only (not an archetype):
+# a "typical" CNS phase 2 trial matching ASPE 2024 Table 2 (CNS phase 2: 243 patients
+# per trial, phase duration 40.1 months). Used by data/benchmark_checks.csv.
+#
+# ASSUMPTIONS (grade D, README §6 #19): 1:1 placebo, 24-week treatment + 4-week
+# follow-up, generic CNS assessments (clinician scale, PRO, labs, ECG, PK), no imaging,
+# no DMC, 40 sites US-weighted, SF 40 %, dropout 30 %/year, 0.30 pts/site/month.
+
+name: ref-cns-ph2-typical
+n_randomised: 243
+
+arms:
+  - {name: active, ratio: 1}
+  - {name: placebo, ratio: 1, placebo: true}
+
+visits:
+  - id: SCR
+    day: -21
+    screening: true
+    procedures: [consent, inclusion_medical, labs_central_panel, blood_draw, sample_handling,
+                 ecg, scale_clinician, scale_pro]
+  - id: BL
+    day: 0
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, ecg,
+                 scale_clinician, scale_pro, pk_sample, pk_bioanalysis, drug_dispensing]
+  - id: W2
+    day: 14
+    procedures: [physical_exam, scale_clinician]
+  - id: W4
+    day: 28
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, scale_clinician,
+                 scale_pro, pk_sample, pk_bioanalysis, drug_dispensing]
+  - id: W8
+    day: 56
+    procedures: [physical_exam, scale_clinician, scale_pro, drug_dispensing]
+  - id: W12
+    day: 84
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, ecg,
+                 scale_clinician, scale_pro, drug_dispensing]
+  - id: W16
+    day: 112
+    procedures: [physical_exam, scale_clinician, scale_pro, drug_dispensing]
+  - id: W20
+    day: 140
+    procedures: [physical_exam, scale_clinician, scale_pro, drug_dispensing]
+  - id: W24
+    day: 168
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, ecg,
+                 scale_clinician, scale_pro]
+  - id: FU
+    day: 196
+    remote: true
+    procedures: [ae_review]
+
+countries:
+  - {country: US, n_sites: 20}
+  - {country: DE, n_sites: 6}
+  - {country: ES, n_sites: 6}
+  - {country: FR, n_sites: 4}
+  - {country: IT, n_sites: 4}
+
+population:
+  screen_failure_rate: {kind: beta, mean: 0.40, kappa: 20}
+  annual_dropout_rate: {kind: beta, mean: 0.30, kappa: 20}
+  rate_mean: {kind: lognormal, median: 0.30, gsd: 1.6}
+  rate_shape: 1.5
+
+operations:
+  sponsor_model: full_cro
+  monitoring: risk_based
+  monitoring_interval_months: 2.0
+  central_lab: true
+  central_imaging_reading: false
+  irt: true
+  dmc: false
+  n_interim_analyses: 0
+  patient_travel_support: false

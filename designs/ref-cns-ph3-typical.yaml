@@ -1,0 +1,83 @@
+# Reference design for benchmark validation only (not an archetype):
+# a "typical" CNS phase 3 / pivotal trial matching ASPE 2024 Table 2 (CNS phase 3:
+# 529 patients per trial, phase duration 45.3 months) and close to the Moore 2018
+# median pivotal trial (488 patients). Used by data/benchmark_checks.csv.
+#
+# ASSUMPTIONS (grade D, README §6 #19): 1:1 placebo, 52-week treatment + 4-week
+# follow-up, generic CNS assessments, no imaging, DMC, 90 sites (40 US, 50 EU),
+# SF 40 %, dropout 25 %/year, 0.25 pts/site/month.
+
+name: ref-cns-ph3-typical
+n_randomised: 529
+
+arms:
+  - {name: active, ratio: 1}
+  - {name: placebo, ratio: 1, placebo: true}
+
+visits:
+  - id: SCR
+    day: -28
+    screening: true
+    procedures: [consent, inclusion_medical, labs_central_panel, blood_draw, sample_handling,
+                 ecg, scale_clinician, scale_pro]
+  - id: BL
+    day: 0
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, ecg,
+                 scale_clinician, scale_pro, pk_sample, pk_bioanalysis, drug_dispensing]
+  - id: W4
+    day: 28
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, scale_clinician,
+                 scale_pro, drug_dispensing]
+  - id: W8
+    day: 56
+    procedures: [physical_exam, scale_clinician, scale_pro, drug_dispensing]
+  - id: W12
+    day: 84
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, ecg,
+                 scale_clinician, scale_pro, pk_sample, pk_bioanalysis, drug_dispensing]
+  - id: W20
+    day: 140
+    procedures: [physical_exam, scale_clinician, scale_pro, drug_dispensing]
+  - id: W28
+    day: 196
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, scale_clinician,
+                 scale_pro, drug_dispensing]
+  - id: W36
+    day: 252
+    procedures: [physical_exam, scale_clinician, scale_pro, drug_dispensing]
+  - id: W44
+    day: 308
+    procedures: [physical_exam, scale_clinician, scale_pro, drug_dispensing]
+  - id: W52
+    day: 364
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, ecg,
+                 scale_clinician, scale_pro]
+  - id: FU
+    day: 392
+    remote: true
+    procedures: [ae_review]
+
+countries:
+  - {country: US, n_sites: 40}
+  - {country: DE, n_sites: 10}
+  - {country: ES, n_sites: 10}
+  - {country: FR, n_sites: 10}
+  - {country: IT, n_sites: 10}
+  - {country: NL, n_sites: 10}
+
+population:
+  screen_failure_rate: {kind: beta, mean: 0.40, kappa: 20}
+  annual_dropout_rate: {kind: beta, mean: 0.25, kappa: 20}
+  rate_mean: {kind: lognormal, median: 0.25, gsd: 1.6}
+  rate_shape: 1.5
+
+operations:
+  sponsor_model: full_cro
+  monitoring: risk_based
+  monitoring_interval_months: 2.0
+  central_lab: true
+  central_imaging_reading: false
+  irt: true
+  dmc: true
+  n_interim_analyses: 0
+  patient_travel_support: false

@@ -3,7 +3,7 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, **engine v0 complete** (design → recruitment → quantities → costs → report, CLI); no UI yet. **No engine yet.**
+> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, **engine v0 complete** (design → recruitment → quantities → costs → report, CLI) and **first benchmark validation done** (§7.2); no UI yet. **No engine yet.**
 > Personal project, built exclusively from public sources.
 
 ---
@@ -246,7 +246,9 @@ Files in `data/` (EUR, price year 2026):
 | `procedures.csv` | 20 per-occurrence site procedures (France reference) |
 | `study_items.csv` | 45 study-, country-, site-, time- and patient-driven items |
 | `countries.csv` | 6 countries: site price index, overhead, labour cost, CTA fees, activation delays |
-| `benchmarks.csv` | 9 published benchmarks, used for validation only |
+| `benchmarks.csv` | 13 published benchmarks (costs and phase durations), used for validation only |
+| `benchmark_checks.csv` | Which design and metric each benchmark is compared with, statistic, comparability (validation only) |
+| `price_indices.csv` | US CPI-U Medical Care annual values, to inflate USD benchmarks to 2026 (validation only) |
 | `sponsor_model_factors.csv` | Multipliers on CRO-delivered labour for `functional` (FSP) and `in_house` sponsor models (D31) |
 | `procedure_overrides.csv` | Country-specific procedure prices replacing *FR price × site index* (1 row: US brain MRI) |
 | `constants.csv` | 4 engine-level parameters (FX rate, close-out months, raters per site, DMC meeting interval), same `low/mode/high` + grade columns |
@@ -302,6 +304,8 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D32 | **One child random stream per random input** (`Generator.spawn` per stage, per country, per catalogue row), refining D29 | Pinning or removing one input (`Fixed`, point mass) consumes no random numbers; with a single shared stream that shifted every later draw. Now verified: pinning one procedure price changes only that procedure's lines |
 | D33 | **Tornado on the mean total cost**, P10/P90 of uncertain inputs, 0.5×/1.5× of fixed ones, groups moved together (§2.6) | Mean is stable with common random numbers and 2,000 sims per bar; group swings answer "what if all our CRO rates are high", which is how the uncertainty is correlated in practice |
 | D34 | No SciPy: the Beta quantile (tornado only) is computed in pure Python (incomplete beta continued fraction + bisection), tested against 1M samples | Adding the dependency was blocked in this session; the function is short and isolated, SciPy can replace it later |
+| D35 | **Benchmark validation by reference designs**: each benchmark compared with a design resembling the trials it summarises (`benchmark_checks.csv`), USD inflated with the US CPI-U Medical Care index (`price_indices.csv`) then converted at the fixed FX; results reported in `reports/benchmark-validation.md`, never asserted | Follows D5 (benchmarks are mixtures of designs); ASPE inflated with the same index; CLAUDE.md: benchmarks are checked in a separate report |
+| D36 | Reference designs live in `designs/ref-*.yaml`; they are **validation fixtures, not archetypes** | Keeps archetypes (user-facing starting points) separate from designs tuned to match published averages |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -329,10 +333,14 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 16. **Driver vs label overlaps (accepted, D30)**: `edc_hosting` is charged over the whole study, so it may overlap the year-1 licence in `edc_build_licence` (≤ ~€18k at mode); `pharmacy_annual` counts every active site-year, so FR year 1 overlaps `site_fixed_fees_fr` (≤ ~€500 per FR site). Labels reworded to say what is counted.
 17. **Operational options (D31, §2.9)**: risk-based hours (central monitoring 8/16/32 h per conduct month, set-up 40/80/160 h) are assumptions; full-SDV visit length ratio 1.17–1.49 from ADAMON; FSP factor 0.65/0.80/0.95 rests on analyst/vendor claims only (weakest number of the set); in-house factor depends on §6 #1 (CRO multiplier) and an assumed utilisation 0.60–0.85; interim analysis = 40 % of `db_lock` + 20 % of `biostatistics` (assumed fractions); the site's own monitoring fee does not grow with longer full-SDV visits.
 18. **All planned sites cost start-up and close-out**, even when a simulated site recruits nobody (late activation); site-months still stop at LPLV.
+19. **Reference designs for validation** (`designs/ref-cns-ph2-typical.yaml`, `ref-cns-ph3-typical.yaml`): N and phase duration from ASPE 2024 Table 2; everything else assumed (1:1 placebo; 24 / 52 weeks of treatment; generic CNS assessments without imaging; 40 / 90 sites, US-weighted; SF 40 %; dropout 30 / 25 % per year; 0.30 / 0.25 patients per site-month).
+20. **Benchmark price years**: Moore 2018 (no price year stated) taken as 2016 USD; Martin 2017 as 2015 USD; the 2026 index value is H1 2026 (latest available). A one-year shift changes the converted values by about 2–4 %.
 
 ---
 
-## 7. Sanity check (throwaway prototype, not validation)
+## 7. Sanity check and validation
+
+### 7.1 Prototype sanity check (throwaway, not validation)
 
 `prototype/sanity_check.py`, 5,000 runs on the archetype:
 
@@ -357,6 +365,28 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 
 Published component shares for context (phase 3, US): administrative staff 20 %, clinical procedures 20 %, clinical staff 15 %, site monitoring 14 %, site retention 11 %, central lab 7 % (Sertkaya 2016 via BMC Health Serv Res 2024). On-site monitoring cited at 15–30 % of total costs in industry RCTs (Griessbach 2024).
 
+### 7.2 Benchmark validation (engine v0, 2026-11-18)
+
+Full table: `reports/benchmark-validation.md` (regenerate with `uv run python -m trialcost.validation --out reports`). Method (D35): each benchmark is compared with a **reference design resembling the trials it summarises**, not with the archetype; USD benchmarks inflated to 2026 with the US CPI-U Medical Care index (as ASPE did) and converted at 1.15. Reported, never asserted in tests.
+
+| Benchmark (EUR 2026) | Compared with | Model | Ratio |
+|---|---|---|---|
+| ASPE CNS phase 2, mean per patient €51.8k | `ref-cns-ph2-typical` (243 pts) | mean €51.1k | **0.99** |
+| ASPE all areas phase 2, mean per patient €62.3k | same (CNS proxy) | €51.1k | 0.82 |
+| Martin phase II, median trial €9.9M | same | median €12.1M | 1.22 (poor match: median trial size unknown) |
+| ASPE CNS phase 3, mean per patient €42.1k | `ref-cns-ph3-typical` (529 pts) | mean €53.8k | **1.28** |
+| Moore pivotal, median trial €21.1M / per patient €45.7k / per patient-visit €4.0k | same (Moore median N = 488) | €27.7M / €52.4k / €5.0k | **1.31 / 1.15 / 1.27** |
+| Moore pivotal ≤ 100 patients, mean trial €6.55M | archetype (50 pts) | mean €5.03M | **0.77** |
+| ASPE phase durations: CNS ph2 40.1, CNS ph3 45.3 months | reference designs | 41.4 / 51.3 months | 1.03 / 1.13 |
+| Tufts phase 2 direct cost per day €21.7k | `ref-cns-ph2-typical` | €10.2k | 0.47 (poor match: day base undefined) |
+
+**Reading**
+- **Mid-size phase 2: in range.** Per-patient cost matches ASPE CNS almost exactly; all-areas is higher because it includes costlier areas (haematology, oncology). Durations are consistent.
+- **Large / long trials: model ~15–30 % high.** ASPE has phase 3 CNS **19 % cheaper per patient** than phase 2; the model has it 5 % dearer. The difference sits in time-driven costs: the 52-week reference keeps sites open 6.7 site-months per patient (4.9 in phase 2) and every site-month is charged at the same rate (site management, monitoring visits, central monitoring).
+- **Small trials: model ~20–25 % low.** The archetype is below Moore's mean for pivotal trials with ≤ 100 patients (a mean, pulled up by expensive trials, so the gap may be smaller against a median).
+- **Together**: the model looks **too flat across trial size**: it may under-cost fixed / small-trial overheads and over-cost time-driven site costs in long, large trials. Candidate causes, to check in the operational review (roadmap #4): monitoring frequency that falls during long maintenance phases (risk-based monitoring), CRO site-management rates per site-month, and study-level fixed costs (protocol, regulatory, data management set-up) for small trials.
+- **Not conclusive**: benchmarks are averages over mixtures of designs, the reference designs are assumptions (§6 #19), and all benchmarks are US-centric.
+
 ---
 
 ## 8. Roadmap
@@ -365,7 +395,7 @@ Published component shares for context (phase 3, US): administrative staff 20 %,
 2. Recruitment priors from ClinicalTrials.gov (enrolment ÷ (sites × recruitment duration) by indication/phase).
 3. Fix known gaps: Italy, BfArM fee; check site management vs monitoring overlap against real CRO quotes (D26).
 4. One-hour review of defaults by an operational professional (CRA or clinical project manager): CRO rates, monitoring frequency, investigator fees.
-5. Validation: reconstruct per-phase benchmarks from typical designs.
+5. ~~Validation: reconstruct per-phase benchmarks from typical designs.~~ First pass done 2026-11-18 (§7.2). Follow-ups: per-site-month time-driven costs in long trials, fixed costs of small trials, more benchmarks (EU, rare disease, phase 2 medians with trial sizes).
 6. Streamlit UI (quick mode), then stlite static page.
 7. v1: technical feasibility (power), academic sponsor parameter, inflation indexing, advanced mode.
 
@@ -392,15 +422,17 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 - [C] Selectra, remboursement IRM — https://selectra.info/assurance/mutuelle-sante/remboursement/irm
 
 ### Cost benchmarks and literature
-- [benchmark] ASPE (2024), Examination of clinical trial costs and barriers for drug development (Table 6) — https://aspe.hhs.gov/sites/default/files/documents/ba3c3c99877862bac0b1d04460ad01b1/drug-development.pdf
+- [benchmark] ASPE (2024), Examination of clinical trial costs and barriers for drug development (Table 6 per-patient costs, 2018 $; Table 2 patients per trial and phase durations; inflation with the Medical Care Price Index) — https://aspe.hhs.gov/sites/default/files/documents/ba3c3c99877862bac0b1d04460ad01b1/drug-development.pdf
 - [context] ASPE/ERG (2014) report page — https://aspe.hhs.gov/report/examination-clinical-trial-costs-and-barriers-drug-development
 - [context] Sertkaya et al. (2016), Key cost drivers of pharmaceutical clinical trials in the US, Clin Trials — https://pubmed.ncbi.nlm.nih.gov/26908540/
 - [context] BMC Health Services Research (2024), per-patient phase III costs and ICER (component shares) — https://link.springer.com/article/10.1186/s12913-024-11638-0
 - [context] Griessbach et al. (2024), Resource use and costs of investigator-sponsored RCTs, J Clin Epidemiol — https://real.mtak.hu/249106/1/Griessbach_Schandelmaier_J%20of%20Clin%20Epid_2024.pdf
 - [benchmark] Moore et al. (2018), JAMA Intern Med, via RAPS — https://www.raps.org/resource/phase-3-trial-costs-estimated-at-19m-study-finds.html
-- [benchmark] Moore et al. (2018), via AJMC — https://www.ajmc.com/focus-of-the-week/more-than-100fold-cost-differences-found-for-pivotal-trials
+- [benchmark] Moore et al. (2018), via AJMC (median N = 488; mean $5.9M for trials with ≤ 100 patients) — https://www.ajmc.com/focus-of-the-week/more-than-100fold-cost-differences-found-for-pivotal-trials
 - [benchmark] Moore et al. (2018), via Global Genes (orphan trials) — https://globalgenes.org/blog/ferris-bueller-and-the-cost-of-pivotal-clinical-trials/
 - [benchmark] Nature Reviews Drug Discovery news (2018), citing Martin et al. 2017 median phase costs — https://www.nature.com/articles/nrd.2018.197.pdf
+- [not accessed] Martin L, Hutchens M, Hawkins C (2017), How much do clinical trials cost? Nat Rev Drug Discov 16:381–382 (paywalled; median trial sizes not obtained) — https://www.nature.com/articles/nrd.2017.70
+- [A] US BLS CPI-U Medical Care, U.S. city average, semiannual (CUUS0000SAM), via FRED (accessed 2026-11-18) — https://fred.stlouisfed.org/series/CUUS0000SAM
 - [benchmark] Clinical Leader (2026), per-patient cost analytics (Tufts cost per day) — https://www.clinicalleader.com/doc/clinical-trial-per-patient-cost-analytics-for-procurement-and-sponsor-strategy-0001
 - [C] Lille ILIS master's thesis (2021), costs of academic French trials (insurance, DM, statistics) — https://pepite-depot.univ-lille.fr/LIBRE/Mem_ILIS/2021/LILU_SMIS_2021_022.pdf
 
@@ -452,6 +484,14 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Benchmark validation report (roadmap #5, first pass)
+- Done: `src/trialcost/validation.py` (CLI `python -m trialcost.validation`), `reports/benchmark-validation.md` / `.csv`; reference designs `designs/ref-cns-ph2-typical.yaml`, `ref-cns-ph3-typical.yaml`; `data/benchmark_checks.csv`, `data/price_indices.csv`; 4 benchmark rows added (Moore ≤ 100 patients mean, 3 ASPE phase durations); `tests/test_validation.py` (runs and converts correctly; no agreement asserted). 175 tests pass. Re-read ASPE 2024 (Table 2 / Table 6) and Moore 2018 (AJMC); medical-care CPI from FRED.
+- Decisions: D35 (validation by reference designs, CPI medical care), D36 (reference designs are fixtures).
+- Assumptions: §6 #19 (reference designs), #20 (benchmark price years).
+- Correction: while writing the checks I first described Moore's sample as "~1/3 uncontrolled or active-controlled"; the source gives no proportions, so the note was corrected before commit.
+- Results: phase 2 per patient matches ASPE CNS (ratio 0.99); large / long trials 15–31 % above ASPE phase 3 and Moore; archetype 23 % below Moore's mean for trials ≤ 100 patients; durations consistent (1.03 / 1.13). Reading: the model is probably too flat across trial size (time-driven site costs high in long trials, fixed costs low in small ones). Details §7.2.
+- Next: take the §7.2 hypotheses into the operational review (roadmap #4); recruitment priors (#2).
 
 ### 2026-11-18 — Sources completed in §9
 - Done: §9 gains the FDA DMC guidance (cited in `interim_analysis` notes), a clearer heading for the Penn / Baylor MRI sources (D25), and the Cochrane Library page and OPTIMON primary paper under "Searched but not usable". All D25 and D31 sources were already listed (commit 5686052).

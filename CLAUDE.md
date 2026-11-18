@@ -32,11 +32,14 @@ data/                    # source of truth for all numbers
   study_items.csv
   countries.csv
   benchmarks.csv         # validation only, never used in estimates
+  benchmark_checks.csv   # benchmark -> reference design + metric (validation only)
+  price_indices.csv      # US CPI medical care, to inflate USD benchmarks (validation only)
   procedure_overrides.csv  # country-specific procedure prices (D25)
   sponsor_model_factors.csv  # labour multipliers for functional / in_house sponsor models (D31)
   constants.csv          # engine-level numbers: FX, close-out months, raters/site, DMC interval
 designs/
   rare-neuro-ph2-mri-scales.yaml
+  ref-*.yaml             # reference designs for benchmark validation (fixtures, not archetypes)
 src/trialcost/
   distributions.py       # Fixed / Triangular / LogNormal / Beta + vectorised sampling
   design.py              # Pydantic schema (README §3) + visits_every() helper
@@ -46,6 +49,8 @@ src/trialcost/
   costing.py             # quantities x unit prices -> cost lines
   simulate.py            # Monte Carlo orchestration, returns tidy results
   report.py              # quantiles, breakdowns, tornado, dropout-cost report
+  validation.py          # benchmark validation report (never asserted in tests)
+reports/                 # generated reports (benchmark-validation.md), regenerate, don't hand-edit
 tests/
 prototype/sanity_check.py  # throwaway loop-based prototype; reference only, do not extend
 README.md
@@ -85,7 +90,8 @@ uv sync
 uv run pytest
 uv run ruff check . && uv run ruff format .   # *.md and prototype/ are excluded in pyproject.toml
 uv run python -m trialcost.simulate designs/rare-neuro-ph2-mri-scales.yaml --n-sims 10000 --seed 42
-# options: --deterministic --budget 5e6 --recruit-by 24 --tornado-sims 2000 --no-tornado --out results/ --lines
+uv run python -m trialcost.validation --out reports   # benchmark validation report
+# simulate options: --deterministic --budget 5e6 --recruit-by 24 --tornado-sims 2000 --no-tornado --out results/ --lines
 ```
 
 ## Keeping the project log
