@@ -92,6 +92,10 @@ COUNTRY_COLUMNS = [
 CONSTANT_COLUMNS = [
     "constant_id", "label", "unit", "low", "mode", "high", "evidence", "source", "notes",
 ]  # fmt: skip
+OVERRIDE_COLUMNS = [
+    "procedure_id", "country", "low", "mode", "high", "apply_overhead",
+    "evidence", "source", "notes",
+]  # fmt: skip
 BENCHMARK_COLUMNS = ["benchmark_id", "description", "value", "unit", "price_year", "source"]
 
 _OPERATION_FLAGS = frozenset(
@@ -276,6 +280,19 @@ def _check_common(
 
 
 @dataclass(frozen=True)
+class ProcedureOverride:
+    """Country-specific price replacing ``FR price x site index`` (D25).
+
+    ``price`` is already a local price in EUR, so it is never multiplied by the
+    site price index; ``apply_overhead`` says whether the country's site
+    overhead is still added on top.
+    """
+
+    price: Triangular
+    apply_overhead: bool
+
+
+@dataclass(frozen=True)
 class Catalogue:
     """Validated catalogue. DataFrames are indexed by their ID column."""
 
@@ -284,6 +301,7 @@ class Catalogue:
     countries: pd.DataFrame
     constants: pd.DataFrame
     benchmarks: pd.DataFrame
+    overrides: pd.DataFrame  # indexed by (procedure_id, country)
     conditions: dict[str, Condition]  # item_id -> parsed applies_if
 
     @staticmethod
@@ -297,6 +315,16 @@ class Catalogue:
     def procedure_price(self, procedure_id: str) -> Triangular:
         """Per-occurrence price at a French (reference) site, EUR 2026."""
         return self._triangular(self.procedures.loc[procedure_id])
+
+    def procedure_override(self, procedure_id: str, country: str) -> ProcedureOverride | None:
+        """Country-specific price for a procedure, or ``None`` if there is none."""
+        key = (procedure_id, country)
+        if key not in self.overrides.index:
+            return None
+        row = self.overrides.loc[key]
+        return ProcedureOverride(
+            price=self._triangular(row), apply_overhead=bool(row["apply_overhead"])
+        )
 
     def item_price(self, item_id: str) -> Triangular:
         """Unit price of a study item per unit of its driver, EUR 2026."""
@@ -351,6 +379,7 @@ def _validate(
     countries: pd.DataFrame,
     constants: pd.DataFrame,
     benchmarks: pd.DataFrame,
+    procedure_overrides: pd.DataFrame,
 ) -> tuple[list[str], dict[str, Condition]]:
     problems: list[str] = []
     conditions: dict[str, Condition] = {}
@@ -420,6 +449,23 @@ def _validate(
             k.append(f"constants: required constant {cid!r} missing")
     problems += k
 
+    # procedure_overrides.csv
+    o = _check_common(procedure_overrides, OVERRIDE_COLUMNS, "procedure_id", "procedure_overrides")
+    if not o:
+        o += _check_range(procedure_overrides, "procedure_id", "procedure_overrides")
+        keys = procedure_overrides[["procedure_id", "country"]]
+        for _, r in keys[keys.duplicated()].iterrows():
+            o.append(f"procedure_overrides: duplicate ({r.procedure_id}, {r.country})")
+        for _, r in procedure_overrides.iterrows():
+            tag = f"procedure_overrides: ({r.procedure_id}, {r.country})"
+            if r.procedure_id not in known_procedures:
+                o.append(f"{tag}: unknown procedure")
+            if r.country not in set(countries.get("country", [])):
+                o.append(f"{tag}: unknown country")
+            if r.apply_overhead not in (True, False):
+                o.append(f"{tag}: apply_overhead must be true/false, got {r.apply_overhead!r}")
+    problems += o
+
     # benchmarks.csv (validation only; no evidence grade)
     b = _check_common(benchmarks, BENCHMARK_COLUMNS, "benchmark_id", "benchmarks", graded=False)
     if not b:
@@ -435,7 +481,14 @@ def load_catalogue(data_dir: str | Path = DATA_DIR) -> Catalogue:
     data_dir = Path(data_dir)
     tables = {
         name: pd.read_csv(data_dir / f"{name}.csv")
-        for name in ("procedures", "study_items", "countries", "constants", "benchmarks")
+        for name in (
+            "procedures",
+            "study_items",
+            "countries",
+            "constants",
+            "benchmarks",
+            "procedure_overrides",
+        )
     }
     problems, conditions = _validate(**tables)
     if problems:
@@ -446,5 +499,6 @@ def load_catalogue(data_dir: str | Path = DATA_DIR) -> Catalogue:
         countries=tables["countries"].set_index("country"),
         constants=tables["constants"].set_index("constant_id"),
         benchmarks=tables["benchmarks"].set_index("benchmark_id"),
+        overrides=tables["procedure_overrides"].set_index(["procedure_id", "country"]),
         conditions=conditions,
     )

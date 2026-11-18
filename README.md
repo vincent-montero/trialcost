@@ -96,7 +96,7 @@ Constant hazard derived from the annual dropout rate. Expected visits completed 
 
 - **Single base currency: EUR**, fixed exchange rate **1 EUR = 1.15 USD** (mid-market ~1.15–1.16 in Nov 2026), **price year 2026**.
 - **France is the reference country** for site procedure prices (public tariffs exist: convention unique + CCAM).
-- Other countries via a **site price index** (triangular) and a **site overhead rate**; a procedure can carry a country-specific override (e.g. US research MRI).
+- Other countries via a **site price index** (triangular) and a **site overhead rate**; a procedure can carry a country-specific price in `procedure_overrides.csv` (e.g. US research MRI), which replaces *FR price × site index*; the country overhead is added on top only if `apply_overhead` is true (D25).
 - The catalogue contains ~20 generic procedures (v0); finer granularity (e.g. MRI with/without contrast) later.
 
 ---
@@ -204,6 +204,7 @@ Files in `data/` (EUR, price year 2026):
 | `study_items.csv` | 39 study-, country-, site-, time- and patient-driven items |
 | `countries.csv` | 6 countries: site price index, overhead, labour cost, CTA fees, activation delays |
 | `benchmarks.csv` | 9 published benchmarks, used for validation only |
+| `procedure_overrides.csv` | Country-specific procedure prices replacing *FR price × site index* (1 row: US brain MRI) |
 | `constants.csv` | 4 engine-level parameters (FX rate, close-out months, raters per site, DMC meeting interval), same `low/mode/high` + grade columns |
 
 ### Evidence grades
@@ -247,6 +248,9 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D22 | Engine-level numbers (FX, close-out, raters per site, DMC interval) live in `data/constants.csv` with the usual grade columns | "No numbers in code" applies to these too |
 | D23 | `study_items.csv` gets a **`country_scaling`** column (`site_price` / `none`), like `procedures.csv`. `site_price` for site-paid items: `pharmacy_annual`, `site_monitoring_fee`, `investigator_fee` (notes said "country-scaled") and the FR-only `site_fixed_fees_fr`, `imaging_site_setup_fr` (no numeric effect: FR index 1, overhead 0). All CRO / vendor items `none` | Previously implicit in notes and prototype code; agreed with Vincent |
 | D24 | Recruitment computed **exactly** (time-change inversion, §2.4) with **fractional expected patients per site** and **no duration cap** | Exact, vectorised (10k sims in ~10 ms), no grid bias; costs are linear in patients |
+| D25 | Country-specific procedure prices in **`procedure_overrides.csv`** (`procedure_id, country, low, mode, high, apply_overhead, evidence, source, notes`). An override is a local EUR price: never multiplied by the site index; overhead added only if `apply_overhead`. **US brain MRI = €687 / 1,000 / 1,261, `apply_overhead = false`** | Vincent delegated the choice. Reasoning: (1) the US site index was itself calibrated on MRI, so *FR × index* would reuse the same evidence with extra noise: a direct US price is stronger; (2) per scan = 1 h research slot + local read, matching the FR definition; low = Baylor CAMRI FY27 single tier ($790 all-in), mode = Penn CAMRIS FY27 industry tier ($1,150 incl. read), high = Penn outside-entity tier ($1,450); (3) no overhead because industry/outside tiers are full-cost-recovery rates (Penn industry = 1.31 × government tier, ≈ US overhead 31–35 %), so adding it would double count. Inference, grade C. Impact small (~€9k on the archetype either way) |
+| D26 | **Keep both `site_management` and `monitoring_visit`**: `site_management` = remote / in-house CRA work per active site-month (CTA, TMF, site contact), `monitoring_visit` = on-site visits | Item definitions do not overlap on paper; possible overlap in real CRO quotes stays flagged in §6 #3 for the operational review (roadmap #4) |
+| D27 | **DMC meetings over the conduct window = first site activation → LPLV**; number of meetings = ⌈window / `dmc_meeting_interval_months`⌉ | DMCs review accrued data during conduct, not only during one patient's treatment period. First activation slightly precedes first patient in (archetype: by ~0.4 month on average), well under one meeting; ceiling counts the partial final period as a meeting |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -258,15 +262,15 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 
 1. **CRO bill-rate multiplier 2.5–3.5 × salary hourly rate** (feeds `monitoring_visit`, `project_management`). No public CRO rate card found. Base salaries: CRA ~$85.5k/y (ZipRecruiter), clinical PM ~$117k/y (Salary.com). For comparison, a staffing-agency markup on contractor pay is quoted at 25–40 % (Freelance Clinical); CRO rates are assumed much higher because they include overhead, utilisation and margin. **Most important parameter to validate.**
 2. **Monitoring visit** = ~12 CRA hours (on-site day + prep + report) + travel €300–900; interval 2 months per active site.
-3. **Site management** €1,000–2,500 per active site-month (Tufts/PharmExec ~$1,500–2,000). May partly double-count with monitoring visits: to be checked.
+3. **Site management** €870–2,174 per active site-month ($1,000–2,500; Tufts/PharmExec ~$1,500–2,000). Kept alongside monitoring visits (D26: remote vs on-site work); real CRO quotes may overlap: to check in the operational review.
 4. **Project management** 40–120 h/month.
 5. **Site price indices** vs France: DE 1.1–1.6, ES 0.7–1.0, IT 0.8–1.1, NL 1.0–1.5, US 2.5–4.0. US anchored on research MRI (€900–1,300 vs ~€300 in FR). Labour costs are informative, not determinant.
 6. **Site overhead**: FR 0 (convention unique includes management fees), EU 10–25 %, US 25–35 % (published institutional rates 31–35 %).
 7. **Activation delays**: 3–12 months by country (Tufts: ~6 months existing sites, ~8.4 months new sites).
 8. **Close-out**: 6 months from LPLV to CSR.
 9. **Investigator fee / contreparties**: €500–3,000 per patient (country-scaled).
-10. **Raters**: 2 per site; **DMC**: one meeting per 6 months of conduct (`constants.csv`). The `dmc_meeting` note in `study_items.csv` says "of treatment period": the exposure window is to be fixed when costing is implemented.
-11. **US MRI override**: €900–1,300 per scan.
+10. **Raters**: 2 per site; **DMC**: one meeting per 6 months of conduct, conduct = first site activation → LPLV (`constants.csv`, D27). The `dmc_meeting` note in `study_items.csv` ("of treatment period") predates D27.
+11. **US brain MRI**: €687 / 1,000 / 1,261 per scan, no overhead added (`procedure_overrides.csv`, D25). Assumes one research scan = 1 h scanner slot + $100 local read; the "no overhead" choice is inferred from Penn's tiered rates, not stated by the source.
 12. **German BfArM fee** not found: CTA range = ethics fees + assumed €3–10k.
 13. **Italy**: labour cost, fees and site index not verified.
 14. **Excluded**: IMP manufacturing, sponsor internal staff, VAT, inflation indexing, explicit CRO margin (embedded in rates).
@@ -305,7 +309,7 @@ Published component shares for context (phase 3, US): administrative staff 20 %,
 
 1. Engine v0: vectorised NumPy Monte Carlo, YAML design loader, breakdowns, tornado, dropout-cost report, deterministic "all-at-mode" mode for testing.
 2. Recruitment priors from ClinicalTrials.gov (enrolment ÷ (sites × recruitment duration) by indication/phase).
-3. Fix known gaps: Italy, BfArM fee, possible double counting site management vs monitoring.
+3. Fix known gaps: Italy, BfArM fee; check site management vs monitoring overlap against real CRO quotes (D26).
 4. One-hour review of defaults by an operational professional (CRA or clinical project manager): CRO rates, monitoring frequency, investigator fees.
 5. Validation: reconstruct per-phase benchmarks from typical designs.
 6. Streamlit UI (quick mode), then stlite static page.
@@ -354,9 +358,9 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 - [context] CASRAI, Clinical trial budget example (budget structure) — https://casrai.org/guides/clinical-trial-budget-example
 
 ### US research procedure prices (anchors for US index)
-- [C] Penn CAMRIS MRI rates FY27 — https://www.med.upenn.edu/camris/rates.html
-- [C] Baylor College of Medicine CAMRI pricing FY27 — https://www.bcm.edu/sites/default/files/pricing-sheet-fy27_camri.pdf
-- [C] UCSD radiology research core services — https://radiology.ucsd.edu/research/core-services/index.html
+- [C] Penn CAMRIS MRI rates FY27 (government $800/h, industry $1,050/h, outside entity $1,350/h; re-read 2026-11-18) — https://www.med.upenn.edu/camris/rates.html
+- [C] Baylor College of Medicine CAMRI pricing FY27 ($600/h, technologist $90, limited radiologist read $100; re-read 2026-11-18) — https://www.bcm.edu/sites/default/files/pricing-sheet-fy27_camri.pdf
+- [not used] UCSD radiology research core services (no rates on the page when re-read 2026-11-18; not used for D25) — https://radiology.ucsd.edu/research/core-services/index.html
 - [context] ACR, CY2026 MPFS final rule impact tables (CPT 70551) — https://edge.sitecorecloud.io/americancoldf5f-acrorgf92a-productioncb02-3650/media/ACR/Files/Medicare-Medicaid/MPFS/CY2026-MPFS-Final-Rule-Impact-Tables-7xxxx-series.pdf
 - [context] URMC Clinical Research Center fee schedule 2024–25 — https://urmc.rochester.edu/MediaLibraries/URMCMedia/ctsi/clinical-research/documents/CRCFees-1July2024-to-30June2025-Updated-10022024-Final.pdf
 
@@ -381,6 +385,14 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Pre-costing decisions: US MRI price, site management, DMC window
+- Done: new `data/procedure_overrides.csv` (1 row: US brain MRI); `catalogue.py` loads and validates it (known procedure and country, unique pair, range, grade, boolean `apply_overhead`) and exposes `procedure_override(procedure_id, country)`; 5 new tests (108 pass). Penn and Baylor sources re-read; the UCSD page has no rates and is now marked not used.
+- Decisions: D25 (override format; US MRI €687 / 1,000 / 1,261, no overhead; full reasoning in §5), D26 (keep `site_management` and `monitoring_visit`), D27 (DMC window = first activation → LPLV, ⌈window / 6⌉ meetings).
+- Assumptions: §6 #3 reworded to match the CSV (€870–2,174 = $1,000–2,500; the old text gave the dollar range with a € sign), #10 and #11 updated.
+- Corrections to earlier entries: none. The US MRI range moves from €900–1,300 (mode 1,100, prototype code) to €687–1,261 (mode 1,000), without overhead in either case.
+- Results: no cost output yet (expected impact on the archetype ≈ −€3k).
+- Next: step 5, `quantities.py` + `costing.py`.
 
 ### 2026-11-18 — Engine step 4: recruitment model (+ D23 catalogue column)
 - Done: `data/study_items.csv` gains `country_scaling` (D23, separate commit; validated in `catalogue.py`; no other value changed). `src/trialcost/recruitment.py`: per-country site activation (design or `countries.csv`), Poisson–gamma site rates with `rate_mean` shared within a simulated trial, exact T_LPI via `time_to_intensity()` (inverse of the piecewise-linear cumulative intensity at S ~ Gamma(N, 1)), expected patients per site; `Recruitment` result dataclass. `tests/test_recruitment.py` (15 tests: hand examples, brute-force Poisson comparison of T_LPI quantiles and per-site counts, deterministic archetype by hand, monotonicity, reproducibility, timing). 103 tests pass.

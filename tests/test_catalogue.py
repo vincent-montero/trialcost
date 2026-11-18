@@ -80,6 +80,14 @@ def test_prices_are_triangular(cat):
         cat.country_range("US", "labour_cost_eur_h")
 
 
+def test_procedure_override(cat):
+    us_mri = cat.procedure_override("mri_brain", "US")
+    assert us_mri.price == Triangular(low=687, mode=1000, high=1261)
+    assert us_mri.apply_overhead is False
+    assert cat.procedure_override("mri_brain", "FR") is None
+    assert cat.procedure_override("ecg", "US") is None
+
+
 def test_activation_defaults_to_catalogue(cat, design):
     assert cat.activation_months(design, "IT") == Triangular(low=5, mode=8, high=12)
     design.countries[0].activation_months = Fixed(value=2.0)
@@ -211,6 +219,10 @@ def drop_column(col: str):
         ),
         ("countries", set_cell(1, "country", "Germany"), "bad country code"),
         ("constants", drop_row(0), "required constant"),
+        ("procedure_overrides", set_cell(0, "procedure_id", "nope"), "unknown procedure"),
+        ("procedure_overrides", set_cell(0, "country", "ZZ"), "unknown country"),
+        ("procedure_overrides", set_cell(0, "apply_overhead", "maybe"), "apply_overhead"),
+        ("procedure_overrides", set_cell(0, "low", 5000), "low <= mode <= high"),
         ("benchmarks", drop_column("source"), "columns"),
     ],
 )

@@ -32,6 +32,7 @@ data/                    # source of truth for all numbers
   study_items.csv
   countries.csv
   benchmarks.csv         # validation only, never used in estimates
+  procedure_overrides.csv  # country-specific procedure prices (D25)
   constants.csv          # engine-level numbers: FX, close-out months, raters/site, DMC interval
 designs/
   rare-neuro-ph2-mri-scales.yaml
@@ -57,7 +58,7 @@ CLAUDE.md
 - `countries.csv`: site price index and overhead (triangular), labour cost (informative only), CTA fee range, activation months range (default when a design omits `activation_months`, D21).
 - `constants.csv`: engine-level parameters with the same `low/mode/high` + grade columns; read them via `Catalogue.constant()`, never hard-code.
 - Automatic per-visit procedures on every **on-site** visit: `coordinator_visit`, `logistics_visit`, `vital_signs`, `patient_travel` (if `operations.patient_travel_support`). Remote visits get none of them.
-- Country-specific procedure overrides (e.g. US MRI €900–1,300) currently live in the prototype code: move them to data (e.g. `procedure_overrides.csv`) — ask before choosing the format.
+- `procedure_overrides.csv`: country-specific procedure prices (D25). An override is a local EUR price: never multiplied by the site index; country overhead added only if `apply_overhead`. Read via `Catalogue.procedure_override()`.
 
 ## Modelling rules (summary; details in README §2)
 
@@ -107,4 +108,4 @@ Vincent wants a running record of the work as the project moves forward. At the 
 - Propose a short plan before multi-file changes; implement in small, reviewable commits.
 - Be honest and precise: say when a number is weak, when results look off against benchmarks, or when a modelling shortcut is taken.
 - When showing code in chat, prefer short inline copy-pasteable snippets.
-- Open questions to raise rather than decide alone: override file format; possible double counting between `site_management` and `monitoring_visit`; how to expose the tornado (which parameters, ranges); first ClinicalTrials.gov query design for recruitment priors.
+- Open questions to raise rather than decide alone: how to expose the tornado (which parameters, ranges); first ClinicalTrials.gov query design for recruitment priors.
