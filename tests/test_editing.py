@@ -71,3 +71,13 @@ def test_to_yaml_roundtrip(design):
     text = editing.to_yaml(design)
     assert Design.model_validate(yaml.safe_load(text)) == design
     assert "monitoring_interval_months: 2.0" in text  # Fixed written as a plain number
+
+
+def test_diff_lists_changes(design):
+    other = editing.apply_fields(design, n_randomised=80, operations={"dmc": False})
+    other = editing.apply_population(other, rate_mean=Fixed(value=0.5))
+    changes = editing.diff(design, other)
+    assert "n_randomised: 50 → 80" in changes
+    assert "operations.dmc: True → False" in changes
+    assert any(c.startswith("population.rate_mean") for c in changes)
+    assert editing.diff(design, design) == []

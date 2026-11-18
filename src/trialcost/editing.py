@@ -168,3 +168,38 @@ def to_yaml(design: Design) -> str:
         return obj
 
     return yaml.safe_dump(simplify(design.model_dump()), sort_keys=False, allow_unicode=True)
+
+
+def diff(a: Design, b: Design) -> list[str]:
+    """Human-readable list of what differs between two designs (flattened fields)."""
+
+    def flat(obj, prefix=""):
+        if isinstance(obj, dict):
+            if obj.get("kind") == "fixed":
+                return {prefix: obj["value"]}
+            out = {}
+            for key, val in obj.items():
+                out.update(flat(val, f"{prefix}.{key}" if prefix else key))
+            return out
+        if isinstance(obj, list):
+            if all(isinstance(x, dict) and "id" in x for x in obj):  # visits
+                return {f"{prefix}[{x['id']}]": x for x in obj}
+            if all(isinstance(x, dict) and "country" in x for x in obj):  # countries
+                return {f"{prefix}[{x['country']}]": x["n_sites"] for x in obj}
+            return {prefix: obj}
+        return {prefix: obj}
+
+    fa, fb = flat(a.model_dump()), flat(b.model_dump())
+    changes = []
+    for key in sorted(set(fa) | set(fb)):
+        if key == "name" or fa.get(key) == fb.get(key):
+            continue
+        if key not in fa:
+            changes.append(f"{key}: added")
+        elif key not in fb:
+            changes.append(f"{key}: removed")
+        elif isinstance(fa[key], dict):
+            changes.append(f"{key}: changed")
+        else:
+            changes.append(f"{key}: {fa[key]} → {fb[key]}")
+    return changes

@@ -129,3 +129,66 @@ def tornado(df: pd.DataFrame) -> alt.LayerChart:
         .encode(x="x:Q")
     )
     return (bars + base_rule).properties(height=max(200, 30 * len(order)))
+
+
+# Categorical slot 3 (aqua) for a third scenario; the first three slots validate
+# all-pairs in both modes (palette reference), so overlays are capped at three.
+SCENARIOS = [*SERIES, "#1baf7a"]
+# Diverging poles (reference palette): blue = cheaper than baseline, red = dearer.
+DIVERGING = {"lower": "#2a78d6", "higher": "#e34948"}
+
+
+def ecdf(values: dict[str, np.ndarray]) -> alt.Chart:
+    """Cumulative distribution of total cost per scenario: read P(cost <= x) directly."""
+    frames = []
+    for name, x in values.items():
+        xs = np.sort(x)
+        idx = np.linspace(0, len(xs) - 1, min(len(xs), 400)).astype(int)  # thin for the browser
+        frames.append(pd.DataFrame({"scenario": name, "cost": xs[idx], "p": (idx + 1) / len(xs)}))
+    data = pd.concat(frames)
+    return (
+        alt.Chart(data)
+        .mark_line(strokeWidth=2, interpolate="step-after")
+        .encode(
+            x=alt.X("cost:Q", axis=_money_axis("Total cost"), scale=alt.Scale(zero=False)),
+            y=alt.Y("p:Q", title="P(total cost ≤ x)", axis=alt.Axis(format="%")),
+            color=alt.Color(
+                "scenario:N",
+                sort=list(values),
+                scale=alt.Scale(domain=list(values), range=SCENARIOS[: len(values)]),
+                legend=alt.Legend(title=None, orient="top"),
+            ),
+            tooltip=[
+                "scenario",
+                alt.Tooltip("cost:Q", title="Total cost €", format=",.0f"),
+                alt.Tooltip("p:Q", title="P(cost ≤ x)", format=".0%"),
+            ],
+        )
+        .properties(height=280)
+    )
+
+
+def delta_bars(delta: pd.Series, title: str) -> alt.Chart:
+    """Change in mean cost per group vs the baseline (diverging colours by sign)."""
+    data = delta.rename("delta").reset_index()
+    data.columns = ["group", "delta"]
+    data["direction"] = np.where(data["delta"] < 0, "lower", "higher")
+    order = data["group"].tolist()
+    return (
+        alt.Chart(data)
+        .mark_bar(cornerRadiusEnd=4, height={"band": 0.7})
+        .encode(
+            y=alt.Y("group:N", sort=order, title=None),
+            x=alt.X("delta:Q", axis=_money_axis(title)),
+            color=alt.Color(
+                "direction:N",
+                scale=alt.Scale(domain=list(DIVERGING), range=list(DIVERGING.values())),
+                legend=alt.Legend(title="vs baseline", orient="top"),
+            ),
+            tooltip=[
+                alt.Tooltip("group:N", title="Group"),
+                alt.Tooltip("delta:Q", title="Δ mean €", format="+,.0f"),
+            ],
+        )
+        .properties(height=max(120, 22 * len(data)))
+    )

@@ -129,3 +129,17 @@ def test_cli_deterministic_skips_tornado(capsys):
     assert main([str(ARCHETYPE), "--deterministic", "--n-sims", "1"]) == 0
     text = capsys.readouterr().out
     assert "Tornado" not in text and f"{GOLDEN_TOTAL / 1e6:,.2f} M€" in text
+
+
+def test_compare_and_category_deltas(design, cat):
+    base = run(design, cat, 500, seed=7)
+    other_design = design.model_copy(deep=True)
+    other_design.operations.dmc = False
+    other = run(other_design, cat, 500, seed=7)
+    table = report.compare({"base": base, "no DMC": other})
+    assert table.loc["base", "delta_cost_P50"] == 0
+    assert table.loc["no DMC", "delta_cost_P50"] < 0
+    deltas = report.category_deltas(base, other)
+    assert deltas.index[0] == "safety"  # DMC lines are in the safety category
+    nonzero = deltas[deltas.abs() > 1e-6]
+    assert set(nonzero.index) == {"safety"}  # common random numbers: nothing else moves

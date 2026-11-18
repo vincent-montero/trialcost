@@ -14,6 +14,7 @@ import charts
 import numpy as np
 import pandas as pd
 import streamlit as st
+from compare_tab import compare_tab, save_control
 from design_editor import design_editor
 
 from trialcost import report
@@ -185,7 +186,7 @@ def main() -> None:
     )
     base, base_name, n_sims, seed, budget = sidebar()
     header = st.container()  # filled after the editor has run
-    tab_results, tab_design = st.tabs(["Results", "Design"])
+    tab_results, tab_design, tab_compare = st.tabs(["Results", "Design", "Compare scenarios"])
     with tab_design:
         design = design_editor(base, base_name, base_catalogue())
     design_json = design.model_dump_json()
@@ -194,8 +195,11 @@ def main() -> None:
         headline(result, budget)
         if design != base:
             st.caption(f"Edited from `{base_name}` (see the Design tab).")
+        save_control(design)
     with tab_results:
         results_tab(result, design_json, n_sims, seed)
+    with tab_compare:
+        compare_tab(lambda dj: simulate(dj, n_sims, seed), eur)
 
 
 main()

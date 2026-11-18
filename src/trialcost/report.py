@@ -379,3 +379,49 @@ def write_outputs(
         result.costs.to_frame().to_csv(path, index=False)
         written.append(path)
     return written
+
+
+# --------------------------------------------------------------------------- #
+# Scenario comparison
+# --------------------------------------------------------------------------- #
+
+
+def compare(results: dict[str, SimulationResult]) -> pd.DataFrame:
+    """One row per scenario: P50 / P10 / P90 cost and duration, and the change vs the first.
+
+    Run all scenarios with the same seed: with common random numbers (D32) the
+    differences reflect the design changes, not Monte Carlo noise.
+    """
+    rows = []
+    for name, r in results.items():
+        p10, p50, p90 = np.quantile(r.total, [0.1, 0.5, 0.9])
+        rows.append(
+            {
+                "scenario": name,
+                "cost_P10": p10,
+                "cost_P50": p50,
+                "cost_P90": p90,
+                "cost_mean": r.total.mean(),
+                "duration_P50": float(np.median(r.duration)),
+                "lpi_P50": float(np.median(r.quantities.t_lpi)),
+                "cost_per_patient_P50": float(np.median(r.total / r.design.n_randomised)),
+            }
+        )
+    df = pd.DataFrame(rows).set_index("scenario")
+    base = df.iloc[0]
+    df["delta_cost_P50"] = df["cost_P50"] - base["cost_P50"]
+    df["delta_cost_P50_pct"] = 100 * (df["cost_P50"] / base["cost_P50"] - 1)
+    df["delta_duration_P50"] = df["duration_P50"] - base["duration_P50"]
+    return df
+
+
+def category_deltas(
+    base: SimulationResult, other: SimulationResult, by: str = "category"
+) -> pd.Series:
+    """Change in mean cost per group (other - base), groups present in either, sorted by |Δ|."""
+    a = base.costs.by(by).mean(axis=1)
+    b = other.costs.by(by).mean(axis=1)
+    delta = b.reindex(a.index.union(b.index), fill_value=0) - a.reindex(
+        a.index.union(b.index), fill_value=0
+    )
+    return delta.reindex(delta.abs().sort_values(ascending=False).index)

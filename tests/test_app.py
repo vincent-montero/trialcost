@@ -71,3 +71,17 @@ def test_untouched_editor_leaves_design_unchanged(name):
     at.sidebar.selectbox[0].select(name).run()
     assert not at.exception
     assert not any("Edited from" in c.value for c in at.caption)
+
+
+def test_scenario_comparison(app):
+    app.text_input(key="sc_name").input("as loaded").run()
+    app.button(key="sc_save").click().run()
+    app.toggle(key="ed_rare-neuro-ph2-mri-scales_dmc").set_value(False).run()
+    app.text_input(key="sc_name").input("no DMC").run()
+    app.button(key="sc_save").click().run()
+    assert not app.exception
+    labels = [m.label for m in app.metric]
+    assert "no DMC: cost P50" in labels
+    delta = next(m for m in app.metric if m.label == "no DMC: cost P50").delta
+    assert delta.startswith("-")
+    assert any("operations.dmc: True → False" in c.value for c in app.caption)
