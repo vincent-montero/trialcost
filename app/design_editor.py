@@ -14,11 +14,31 @@ import streamlit as st
 from pydantic import ValidationError
 
 from trialcost import editing
-from trialcost.catalogue import Catalogue
+from trialcost.catalogue import AUTO_ONSITE_PROCEDURES, TRAVEL_PROCEDURE, Catalogue
 from trialcost.design import Design, Operations
 from trialcost.distributions import Beta, LogNormal
 
 KEEP = "As in the design file"
+CHOICE_LABELS = {
+    "risk_based": "Risk-based (targeted SDV + central monitoring)",
+    "full_sdv": "100 % source data verification",
+    "full_cro": "Full-service CRO",
+    "functional": "Functional service provider (FSP)",
+    "in_house": "In-house",
+}
+AUTOMATIC = {*AUTO_ONSITE_PROCEDURES, TRAVEL_PROCEDURE}
+
+
+def _describe(dist, pct: bool = False) -> str:
+    """Short human description of a distribution for captions."""
+    fmt = (lambda v: f"{100 * v:.0f} %") if pct else (lambda v: f"{v:.2f}")
+    if isinstance(dist, LogNormal):
+        return f"median {fmt(dist.median)} (spread factor {dist.gsd:.2f})"
+    if isinstance(dist, Beta):
+        return f"mean {fmt(dist.mean)}"
+    return fmt(dist.central())
+
+
 CUSTOM = "Custom"
 
 
@@ -101,7 +121,10 @@ def population(d: Design, k: str) -> Design:
     if sf != sf_now:
         fields["screen_failure_rate"] = Beta(mean=max(sf, 1e-4), kappa=20)
     fields["rate_shape"] = shape
-    c3.caption(f"Rate: {d.population.rate_mean.model_dump(exclude={'kind'})}")
+    c3.caption(
+        f"Current recruitment rate: {_describe(d.population.rate_mean)} patients per open "
+        f"site-month; annual dropout: {_describe(d.population.annual_dropout_rate, pct=True)}."
+    )
     return _try(d, "Population", lambda x: editing.apply_population(x, **fields))
 
 
@@ -112,10 +135,18 @@ def operations(d: Design, k: str) -> Design:
     monitoring, models = _choices("monitoring"), _choices("sponsor_model")
     ops: dict = {
         "monitoring": c1.selectbox(
-            "Monitoring", monitoring, index=monitoring.index(o.monitoring), key=f"{k}_mon"
+            "Monitoring",
+            monitoring,
+            index=monitoring.index(o.monitoring),
+            format_func=lambda v: CHOICE_LABELS.get(v, v),
+            key=f"{k}_mon",
         ),
         "sponsor_model": c3.selectbox(
-            "Sponsor model", models, index=models.index(o.sponsor_model), key=f"{k}_spons"
+            "Sponsor model",
+            models,
+            index=models.index(o.sponsor_model),
+            format_func=lambda v: CHOICE_LABELS.get(v, v),
+            key=f"{k}_spons",
         ),
     }
     interval_now = float(o.monitoring_interval_months.central())
@@ -168,9 +199,12 @@ def visits(d: Design, k: str, cat: Catalogue) -> Design:
         num_rows="dynamic",
         hide_index=True,
         key=f"{k}_visits_{hash(st.session_state.get(gen_key, ''))}",
+        # Automatic on-site procedures are added by the engine: not shown (their columns
+        # stay in the returned table, so nothing is lost).
+        column_order=["id", "day", "screening", "remote"] + [p for p in ids if p not in AUTOMATIC],
         column_config={
-            "id": st.column_config.TextColumn("Visit", required=True),
-            "day": st.column_config.NumberColumn("Day", step=1, required=True),
+            "id": st.column_config.TextColumn("Visit", required=True, pinned=True),
+            "day": st.column_config.NumberColumn("Day", step=1, required=True, pinned=True),
             **{p: st.column_config.CheckboxColumn(p, help=labels[p]) for p in ids},
         },
     )

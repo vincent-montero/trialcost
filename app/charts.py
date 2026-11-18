@@ -13,26 +13,59 @@ SERIES = ["#2a78d6", "#eb6834"]
 GUIDE = "#8a8984"  # recessive reference lines (quantile markers)
 
 
+#: Pixels per category row in horizontal bar charts, and room for axes / legend.
+ROW = 26
+FRAME = 110
+#: Long right tails (wide recruitment priors) are cut at this quantile on screen.
+TAIL_QUANTILE = 0.99
+
+
 def _money_axis(title: str) -> alt.Axis:
     return alt.Axis(title=title, format="~s", labelExpr="'€' + datum.label")
 
 
+def _category_axis() -> alt.Axis:
+    """Every category label shown (no overlap culling), long names allowed."""
+    return alt.Axis(title=None, labelOverlap=False, labelLimit=260)
+
+
+def element_height(n_rows: int) -> int:
+    """Pixel height to pass to st.altair_chart for an n-row horizontal bar chart."""
+    return ROW * n_rows + FRAME
+
+
+def tail_cut(*arrays: np.ndarray) -> float:
+    """Upper display limit shared by several distributions (largest P99)."""
+    return float(max(np.quantile(a, TAIL_QUANTILE) for a in arrays))
+
+
 def histogram(values: np.ndarray, title: str, money: bool = True) -> alt.LayerChart:
-    """Distribution of one quantity with P10 / P50 / P90 markers."""
-    df = pd.DataFrame({"value": values})
+    """Distribution of one quantity with P10 / P50 / P90 markers.
+
+    The x-axis stops at P99 so a long right tail does not squash the body; the
+    caller says so in a caption. Quantile labels sit on three rows so close
+    quantiles never overlap.
+    """
+    upper = tail_cut(values)
+    df = pd.DataFrame({"value": values[values <= upper]})
     q = pd.DataFrame(
-        {"label": ["P10", "P50", "P90"], "value": np.quantile(values, [0.1, 0.5, 0.9])}
+        {
+            "label": ["P10", "P50", "P90"],
+            "value": np.quantile(values, [0.1, 0.5, 0.9]),
+            "ypix": [0, 13, 26],  # staggered label rows, in pixels from the top
+        }
     )
     axis = _money_axis(title) if money else alt.Axis(title=title)
     fmt = ",.0f" if money else ".1f"
+    bins = alt.Bin(maxbins=40)
     bars = (
         alt.Chart(df)
         .mark_bar(color=SERIES[0], cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
         .encode(
-            x=alt.X("value:Q", bin=alt.Bin(maxbins=40), axis=axis),
+            x=alt.X("value:Q", bin=bins, axis=axis),
             y=alt.Y("count():Q", title="Simulated trials"),
             tooltip=[
-                alt.Tooltip("value:Q", bin=alt.Bin(maxbins=40), title=title, format=fmt),
+                alt.Tooltip("value:Q", bin=bins, title=title, format=fmt),
                 alt.Tooltip("count():Q", title="Trials"),
             ],
         )
@@ -44,8 +77,8 @@ def histogram(values: np.ndarray, title: str, money: bool = True) -> alt.LayerCh
     )
     labels = (
         alt.Chart(q)
-        .mark_text(align="left", dx=3, dy=-4, color=GUIDE, baseline="bottom")
-        .encode(x="value:Q", y=alt.value(0), text="label")
+        .mark_text(align="left", dx=4, baseline="top", color=GUIDE, fontSize=11)
+        .encode(x="value:Q", y=alt.Y("ypix:Q", scale=None), text="label")
     )
     return (bars + rules + labels).properties(height=240)
 
@@ -55,7 +88,7 @@ def breakdown(df: pd.DataFrame, dimension: str) -> alt.LayerChart:
     data = df.reset_index().rename(columns={df.index.name or "index": "group"})
     data["share_pct"] = 100 * data["share"]
     order = data.sort_values("mean", ascending=False)["group"].tolist()
-    y = alt.Y("group:N", sort=order, title=None)
+    y = alt.Y("group:N", sort=order, axis=_category_axis())
     tooltip = [
         alt.Tooltip("group:N", title=dimension.capitalize()),
         alt.Tooltip("mean:Q", title="Mean €", format=",.0f"),
@@ -74,7 +107,10 @@ def breakdown(df: pd.DataFrame, dimension: str) -> alt.LayerChart:
         .mark_rule(color=GUIDE, strokeWidth=1.5)
         .encode(x="P10:Q", x2="P90:Q", y=y, tooltip=tooltip)
     )
-    return (bars + whiskers).properties(height=max(160, 22 * len(data)))
+    return (bars + whiskers).properties(height=ROW * len(data))
+
+
+TORNADO_SIDES = ["Input low (P10, or 0.5x if fixed)", "Input high (P90, or 1.5x if fixed)"]
 
 
 def tornado(df: pd.DataFrame) -> alt.LayerChart:
@@ -87,8 +123,8 @@ def tornado(df: pd.DataFrame) -> alt.LayerChart:
     rows = []
     for _, r in df.iterrows():
         for side, cost, label in (
-            ("Input low (P10, or 0.5x if fixed)", r.cost_at_low, r.low_input),
-            ("Input high (P90, or 1.5x if fixed)", r.cost_at_high, r.high_input),
+            (TORNADO_SIDES[0], r.cost_at_low, r.low_input),
+            (TORNADO_SIDES[1], r.cost_at_high, r.high_input),
         ):
             rows.append(
                 {
@@ -106,13 +142,13 @@ def tornado(df: pd.DataFrame) -> alt.LayerChart:
         alt.Chart(data)
         .mark_bar(height={"band": 0.6}, cornerRadius=2)
         .encode(
-            y=alt.Y("parameter:N", sort=order, title=None),
+            y=alt.Y("parameter:N", sort=order, axis=_category_axis()),
             x=alt.X("start:Q", axis=_money_axis("Mean total cost"), scale=alt.Scale(zero=False)),
             x2="end:Q",
             color=alt.Color(
                 "side:N",
-                scale=alt.Scale(range=SERIES),
-                legend=alt.Legend(title=None, orient="top"),
+                scale=alt.Scale(domain=TORNADO_SIDES, range=SERIES),
+                legend=alt.Legend(title=None, orient="top", labelLimit=320),
             ),
             tooltip=[
                 "parameter",
@@ -128,7 +164,7 @@ def tornado(df: pd.DataFrame) -> alt.LayerChart:
         .mark_rule(color=GUIDE, strokeWidth=1.5)
         .encode(x="x:Q")
     )
-    return (bars + base_rule).properties(height=max(200, 30 * len(order)))
+    return (bars + base_rule).properties(height=ROW * len(order))
 
 
 # Categorical slot 3 (aqua) for a third scenario; the first three slots validate
@@ -140,17 +176,21 @@ DIVERGING = {"lower": "#2a78d6", "higher": "#e34948"}
 
 def ecdf(values: dict[str, np.ndarray]) -> alt.Chart:
     """Cumulative distribution of total cost per scenario: read P(cost <= x) directly."""
+    upper = tail_cut(*values.values())
     frames = []
     for name, x in values.items():
         xs = np.sort(x)
+        xs = xs[xs <= upper]  # display cut at P99; probabilities still over all trials
         idx = np.linspace(0, len(xs) - 1, min(len(xs), 400)).astype(int)  # thin for the browser
-        frames.append(pd.DataFrame({"scenario": name, "cost": xs[idx], "p": (idx + 1) / len(xs)}))
+        frames.append(pd.DataFrame({"scenario": name, "cost": xs[idx], "p": (idx + 1) / len(x)}))
     data = pd.concat(frames)
     return (
         alt.Chart(data)
         .mark_line(strokeWidth=2, interpolate="step-after")
         .encode(
-            x=alt.X("cost:Q", axis=_money_axis("Total cost"), scale=alt.Scale(zero=False)),
+            x=alt.X(
+                "cost:Q", axis=_money_axis("Total cost"), scale=alt.Scale(zero=False, nice=False)
+            ),
             y=alt.Y("p:Q", title="P(total cost ≤ x)", axis=alt.Axis(format="%")),
             color=alt.Color(
                 "scenario:N",
@@ -178,7 +218,7 @@ def delta_bars(delta: pd.Series, title: str) -> alt.Chart:
         alt.Chart(data)
         .mark_bar(cornerRadiusEnd=4, height={"band": 0.7})
         .encode(
-            y=alt.Y("group:N", sort=order, title=None),
+            y=alt.Y("group:N", sort=order, axis=_category_axis()),
             x=alt.X("delta:Q", axis=_money_axis(title)),
             color=alt.Color(
                 "direction:N",
@@ -190,5 +230,5 @@ def delta_bars(delta: pd.Series, title: str) -> alt.Chart:
                 alt.Tooltip("delta:Q", title="Δ mean €", format="+,.0f"),
             ],
         )
-        .properties(height=max(120, 22 * len(data)))
+        .properties(height=ROW * len(data))
     )

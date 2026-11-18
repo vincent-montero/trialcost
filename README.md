@@ -357,6 +357,7 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 21. **Site open fraction f = 0.75** (0.6–0.9) converts CT.gov crude rates into rates per open site-month; the rate prior scales with 1/f (crude median 0.29 for phase 2). Not propagated as uncertainty: the tornado's rate swing covers it.
 22. **CT.gov prior spreads include measurement noise** (window estimate, incomplete site lists), so gsd 2.5 and κ 2.4 probably overstate true between-trial variability; they are wide, i.e. conservative. Dropout annualised with a constant hazard from periods ≥ 6 months; front-loaded dropout would make it slightly high for long trials.
 23. **Trial-size bias of the prior**: the fit pools rare-neuro trials of all sizes and indications (median 23 sites, 97 patients); per-indication priors are possible from the same table but small samples.
+24. **Implausible duration tail (open question)**: with the CT.gov rate spread (gsd 2.53, §6 #22) the archetype's duration is P90 54, P99 104, P99.9 180 months, and 7 % of simulated trials last more than 5 years. Real trials that slow would add sites, change countries or stop. Options: truncate the rate prior (e.g. at its P2.5), model rescue actions, or shrink the measured spread for noise. The app cuts its charts at P99 but every statistic still includes the tail.
 
 ---
 
@@ -525,6 +526,12 @@ Design rules (D42): heavy tabs compute only when open; editors always rendered; 
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Visual review of the app in Chrome, fixes
+- Done: reviewed every tab in a real browser and fixed what it showed: histogram P10/P50 labels overlapped (now on staggered rows) and long tails squashed the charts (axes cut at P99, caption says so; ECDF in Compare too, probabilities still over all trials); breakdown, tornado and Δ charts dropped every other category label (explicit pixel height via `st.altair_chart(height=...)`, no label culling, longer label limit); negative amounts printed "€-40k" (now "−€40k"); Design: raw dict caption replaced by a sentence, readable labels for monitoring and sponsor model, automatic on-site procedures hidden from the visit grid (kept in the data), Visit / Day columns pinned; Assumptions: rationale column moved next to the values, "Item" pinned; Method: ratios to 2 decimals, simulation count no longer hard-coded in the text. Tornado legend order fixed (low = blue, high = orange). 229 tests pass.
+- Decisions: none. Assumptions: §6 #24 (implausible duration tail, open question).
+- Results: estimates unchanged.
+- Next: deploy; decide how to handle the recruitment-rate tail (§6 #24).
 
 ### 2026-11-18 — App refined with the developing-with-streamlit skill
 - Done: read the skill (best practices, performance, layouts, selection widgets, charts, data display, theme, design, testing) and applied it to `app/`: stateful tabs with `.open` guards for Results / Compare / Method, `segmented_control` (with `persist_state="page"`) instead of horizontal radios, tornado behind a toggle, bordered `height="stretch"` metric cards (budget probability became a card), bottom-aligned rows (`st.container(horizontal=True)` / `vertical_alignment`), bordered design-editor sections, Material Symbols on tabs, buttons and expanders, `title=` on alerts, `alt=` everywhere, `page_icon=":material/science:"`; `.streamlit/config.toml` theme (locked light, accent `#2a78d6`, chart palette). Type check with `ty`: fixed two Streamlit typing issues (`to_json` optional return, `format_func` returning None); 41 remaining diagnostics are pandas-stub noise. Verified with the agent API on a separate headless instance (results, scenario save / compare, method tab: no exceptions; console clean). Tests updated (tabs opened via `session_state["main_tabs"]`), plus one asserting closed tabs do not compute. 229 tests pass.

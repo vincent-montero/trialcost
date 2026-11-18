@@ -89,6 +89,7 @@ def compare_tab(
         charts.ecdf({name: results[name].total for name in chosen}),
         alt="Cumulative distribution of total cost for each compared scenario",
     )
+    st.caption("Axis stops at the largest P99; probabilities count every simulated trial.")
 
     for name in chosen[1:]:
         st.markdown(f"**{name}** vs **{base_name}**")
@@ -112,6 +113,7 @@ def compare_tab(
         else:
             st.altair_chart(
                 charts.delta_bars(deltas, "Δ mean cost"),
+                height=charts.element_height(len(deltas)),
                 alt=f"Change in mean cost by {by}, {name} versus {base_name}",
             )
 

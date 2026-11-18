@@ -86,7 +86,10 @@ def tornado_table(
 
 
 def eur(x: float) -> str:
-    return f"€{x / 1e6:,.2f}M" if abs(x) >= 1e6 else f"€{x / 1e3:,.0f}k"
+    """€4.51M / €90k, with a typographic minus for negative amounts (e.g. minus €40k)."""
+    sign = "\u2212" if x < 0 else ""  # U+2212 minus sign
+    x = abs(x)
+    return f"{sign}€{x / 1e6:,.2f}M" if x >= 1e6 else f"{sign}€{x / 1e3:,.0f}k"
 
 
 def quantiles(x: np.ndarray) -> tuple[float, float, float]:
@@ -167,6 +170,12 @@ def results_tab(
             alt="Distribution of simulated trial duration with P10, P50 and P90 markers",
         )
 
+    st.caption(
+        f"Axes stop at P99 ({eur(charts.tail_cut(result.total))}, "
+        f"{charts.tail_cut(result.duration):.0f} months): the rarest, slowest-recruiting "
+        "trials are not drawn but remain in every statistic."
+    )
+
     st.subheader("Where the money goes", anchor=False)
     by = st.segmented_control(
         "Break down by",
@@ -179,7 +188,9 @@ def results_tab(
     table = report.breakdown(result, by)
     st.caption("Bar = mean cost; whisker = P10-P90 across simulated trials.")
     st.altair_chart(
-        charts.breakdown(table, by), alt=f"Mean cost by {by}, largest first, with P10-P90 range"
+        charts.breakdown(table, by),
+        height=charts.element_height(len(table)),
+        alt=f"Mean cost by {by}, largest first, with P10-P90 range",
     )
     with st.expander("Table", icon=":material/table:"):
         st.dataframe(
@@ -220,6 +231,7 @@ def results_tab(
         tt = tornado_table(design_json, suggestions_json, seed)
         st.altair_chart(
             charts.tornado(tt),
+            height=charts.element_height(len(tt)),
             alt=f"Tornado: {tt['parameter'].iloc[0]} moves the mean total cost most",
         )
         with st.expander("Table", icon=":material/table:"):

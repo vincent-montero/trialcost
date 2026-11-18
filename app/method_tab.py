@@ -47,8 +47,9 @@ not drug manufacturing, not sponsor internal staff (except under the in-house mo
 **How.** Each simulated trial draws site activation and recruitment (Poisson-gamma model),
 screen failure and dropout, and every uncertain unit price; it then counts what the design
 consumes (screened and randomised patients, visits and procedures, site-months, monitoring
-visits, months of project management...) and prices it. 10,000 simulations give the P10 / P50
-/ P90 shown. Scenarios share the same random numbers, so differences between them are exact.
+visits, months of project management...) and prices it. Thousands of simulated trials (set in
+the sidebar) give the P10 / P50 / P90 shown. Scenarios share the same random numbers, so
+differences between them are exact.
 
 **Where numbers come from.** Every number lives in a CSV of the public repository with an
 evidence grade: **A** read from an official tariff, **B** secondary source, **C** derived,
@@ -75,6 +76,7 @@ evidence grade: **A** read from an official tariff, **B** secondary source, **C*
                 columns={"ratio_model_to_benchmark": "model / benchmark"}
             ),
             hide_index=True,
+            column_config={"model / benchmark": st.column_config.NumberColumn(format="%.2f")},
             alt="Model to benchmark ratios for fair comparisons",
         )
         st.caption(

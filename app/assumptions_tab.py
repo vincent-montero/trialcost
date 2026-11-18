@@ -25,6 +25,14 @@ LABELS = {
     "constants": "Constants",
 }
 KEY = "suggestions"
+# Rationale next to the editable values; long source / notes last.
+COLUMN_ORDER = [
+    "row_id", "share_of_total_pct", "label",
+    "low", "mode", "high",
+    *(f"{r}_{b}" for r in ("site_price", "site_overhead", "cta_fee_eur", "activation_months")
+      for b in ("low", "mode", "high")),
+    "rationale", "evidence", "source", "notes",
+]  # fmt: skip
 
 
 def active() -> pd.DataFrame:
@@ -75,13 +83,14 @@ def assumptions_tab(base: Catalogue, session: Catalogue, item_share: pd.Series) 
         key=f"sg_editor_{table}_{hash(active_json())}_{only_d}",
         hide_index=True,
         disabled=[c for c in shown.columns if c not in editable],
+        # Rationale next to the editable values; long source / notes last.
+        column_order=[c for c in COLUMN_ORDER if c in shown.columns],
         column_config={
             "share_of_total_pct": st.column_config.NumberColumn(
                 "% of total", format="%.1f", help="Share of the current design's mean total cost"
             ),
-            "rationale": st.column_config.TextColumn(
-                "rationale (required to suggest)", width="large"
-            ),
+            "row_id": st.column_config.TextColumn("Item", pinned=True),
+            "rationale": st.column_config.TextColumn("Rationale (required)", width="medium"),
         },
     )
     if st.button(
