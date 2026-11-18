@@ -412,6 +412,7 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 - [context] Pharmaceutical Technology, sponsored interview (KPS: up to 40 % below full-service; vendor claim) — https://www.pharmaceutical-technology.com/sponsored/outsourcing-trends-in-clinical-trials-how-one-company-is-reimagining-the-fsp-model/
 - [C] HiBob, Fully burdened labor rate (1.25–1.4 × salary rule of thumb) — https://www.hibob.com/financial-metrics/fully-burdened-labor-rate/
 - [C] Payoneer, Labor burden guide 2026 — https://www.payoneer.com/resources/workforce-management/hr-and-compliance/labor-burden/
+- [context] FDA (2024, draft guidance), Use of Data Monitoring Committees in Clinical Trials (interim comparative data restricted to the DMC and the statisticians producing the analysis; basis for the independent-statistician component of `interim_analysis`) — https://www.fda.gov/media/176107/download
 - [searched, nothing usable] Public price of an interim analysis / unscheduled DMC review (Nov 2026)
 
 ### Operational cost aggregators (secondary)
@@ -421,7 +422,7 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 - [B] MedDeviceGuide, Imaging core labs: budget breakdown — https://meddeviceguide.com/blog/imaging-core-lab-medical-device-clinical-trials-guide
 - [context] CASRAI, Clinical trial budget example (budget structure) — https://casrai.org/guides/clinical-trial-budget-example
 
-### US research procedure prices (anchors for US index)
+### US research procedure prices (US brain MRI price, D25; anchors for the US site index)
 - [C] Penn CAMRIS MRI rates FY27 (government $800/h, industry $1,050/h, outside entity $1,350/h; re-read 2026-11-18) — https://www.med.upenn.edu/camris/rates.html
 - [C] Baylor College of Medicine CAMRI pricing FY27 ($600/h, technologist $90, limited radiologist read $100; re-read 2026-11-18) — https://www.bcm.edu/sites/default/files/pricing-sheet-fy27_camri.pdf
 - [not used] UCSD radiology research core services (no rates on the page when re-read 2026-11-18; not used for D25) — https://radiology.ucsd.edu/research/core-services/index.html
@@ -441,6 +442,8 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 - [A] Wise, EUR to USD (≈1.16, Nov 2026) — https://wise.com/in/currency-converter/eur-to-usd-rate
 
 ### Searched but not usable
+- Cochrane Library page of Klatte 2021 (HTTP 403 from this environment; the UCL repository copy above was used instead) — https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.MR000051.pub2/full
+- Journot 2017 OPTIMON primary paper (not located; OPTIMON figures taken from the Cochrane review)
 - Apices CRO, clinical trial cost in Europe (fetch failed) — https://apicescro.com/clinical-trial-cost-europe/
 - EPM Scientific, Clinical operations rates guide Europe (gated) — https://www.epmscientific.com/en-de/industry-insights/compensation-guides/clinical-operations-rates-guide-europe
 
@@ -449,6 +452,11 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Sources completed in §9
+- Done: §9 gains the FDA DMC guidance (cited in `interim_analysis` notes), a clearer heading for the Penn / Baylor MRI sources (D25), and the Cochrane Library page and OPTIMON primary paper under "Searched but not usable". All D25 and D31 sources were already listed (commit 5686052).
+- Decisions: none. Assumptions: none. Results: unchanged.
+- Next: unchanged (see previous entry).
 
 ### 2026-11-18 — Engine step 6: CLI and reports (engine v0 complete)
 - Done: `src/trialcost/simulate.py` (`run()` → `SimulationResult`, CLI with `--n-sims`, `--seed`, `--deterministic`, `--budget`, `--recruit-by`, `--tornado-sims`, `--no-tornado`, `--out`, `--lines`, `--data-dir`); `src/trialcost/report.py` (summary, probabilities, breakdowns with shares, dropout-cost report, tornado, text report, CSV outputs); `quantile()` / `is_point_mass` on every distribution; one child random stream per random input in recruitment, quantities and costing; ruff ignores PD011 (false positives on `CostLines.values`); `tests/test_simulate_report.py` + quantile tests (168 pass). P50 regression band moved deliberately from 4.6–5.0 to 4.7–5.1 M€ after D31.
