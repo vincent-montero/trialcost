@@ -7,6 +7,7 @@ from Monte Carlo noise (common random numbers, D32).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 import charts
@@ -19,22 +20,24 @@ from trialcost.simulate import SimulationResult
 MAX_SCENARIOS = 3  # palette: the first three categorical slots validate all-pairs
 
 
-def scenarios() -> dict[str, str]:
-    """name -> design JSON, in insertion order."""
+def scenarios() -> dict[str, tuple[str, str]]:
+    """name -> (design JSON, suggestions JSON), in insertion order."""
     return st.session_state.setdefault("scenarios", {})
 
 
-def save_control(design: Design) -> None:
+def save_control(design: Design, suggestions_json: str) -> None:
     c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
     name = c1.text_input(
         "Save the current design as a scenario", placeholder="e.g. monthly full SDV", key="sc_name"
     )
     if c2.button("Save scenario", key="sc_save", disabled=not name):
-        scenarios()[name.strip()] = design.model_dump_json()
+        scenarios()[name.strip()] = (design.model_dump_json(), suggestions_json)
         st.toast(f"Saved scenario “{name.strip()}”")
 
 
-def compare_tab(simulate: Callable[[str], SimulationResult], eur: Callable[[float], str]) -> None:
+def compare_tab(
+    simulate: Callable[[str, str], SimulationResult], eur: Callable[[float], str]
+) -> None:
     saved = scenarios()
     if len(saved) < 2:
         st.info(
@@ -54,7 +57,7 @@ def compare_tab(simulate: Callable[[str], SimulationResult], eur: Callable[[floa
     if len(chosen) < 2:
         st.warning("Choose at least two scenarios.")
         return
-    results = {name: simulate(saved[name]) for name in chosen}
+    results = {name: simulate(*saved[name]) for name in chosen}
     table = report.compare(results)
 
     base_name = chosen[0]
@@ -74,6 +77,9 @@ def compare_tab(simulate: Callable[[str], SimulationResult], eur: Callable[[floa
     for name in chosen[1:]:
         st.markdown(f"**{name}** vs **{base_name}**")
         changes = editing.diff(results[base_name].design, results[name].design)
+        n_a, n_b = (len(json.loads(saved[x][1])) for x in (base_name, name))
+        if saved[base_name][1] != saved[name][1]:
+            changes.append(f"reviewer suggestions: {n_a} → {n_b}")
         st.caption("Design changes: " + ("; ".join(changes) if changes else "none"))
         by = st.radio(
             "Δ by", ["category", "resource", "country"], horizontal=True, key=f"sc_by_{name}"

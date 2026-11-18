@@ -85,3 +85,31 @@ def test_scenario_comparison(app):
     delta = next(m for m in app.metric if m.label == "no DMC: cost P50").delta
     assert delta.startswith("-")
     assert any("operations.dmc: True → False" in c.value for c in app.caption)
+
+
+def test_suggestion_flow(app):
+    before = app.metric[0].value
+    app.text_input(key="sg_reviewer").input("CRA tester").run()
+    assert any(b.label == "Add my changes as suggestions" for b in app.button)
+    # Editing a data_editor is not scriptable in AppTest: add the suggestion via session state
+    from trialcost import suggestions as sg
+
+    app.session_state["suggestions"] = sg.merge(
+        sg.empty(),
+        [
+            sg.make(
+                "study_items",
+                "project_management",
+                "mode",
+                12000,
+                20000,
+                "PM effort higher",
+                "CRA tester",
+            )
+        ],
+    )
+    app.run()
+    assert not app.exception
+    assert app.metric[0].value != before
+    assert any("reviewer suggestion(s) active" in w.value for w in app.warning)
+    assert any(b.label == "Download suggestions (CSV)" for b in app.get("download_button"))

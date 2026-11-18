@@ -8,16 +8,19 @@ catalogue (``data/``). Nothing here writes to ``data/``.
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import charts
 import numpy as np
 import pandas as pd
 import streamlit as st
+from assumptions_tab import active, active_json, assumptions_tab
 from compare_tab import compare_tab, save_control
 from design_editor import design_editor
 
 from trialcost import report
+from trialcost import suggestions as sg
 from trialcost.catalogue import Catalogue, load_catalogue
 from trialcost.design import Design, load_design
 from trialcost.simulate import SimulationResult, run
@@ -44,22 +47,34 @@ def design_files() -> dict[str, Path]:
     return {p.stem: p for p in files}
 
 
+@st.cache_resource(max_entries=32)
+def session_catalogue(suggestions_json: str) -> Catalogue:
+    """Published catalogue with this session's reviewer suggestions applied (D40)."""
+    df = pd.read_json(io.StringIO(suggestions_json), orient="records", dtype={"row_id": str})
+    if df.empty:
+        return base_catalogue()
+    return sg.apply_to_catalogue(base_catalogue(), df)
+
+
 @st.cache_data(show_spinner="Simulating…", max_entries=32)
-def simulate(design_json: str, n_sims: int, seed: int) -> SimulationResult:
-    """Cached on the design (as JSON), number of simulations and seed."""
-    return run(Design.model_validate_json(design_json), base_catalogue(), n_sims, seed)
+def simulate(design_json: str, suggestions_json: str, n_sims: int, seed: int) -> SimulationResult:
+    """Cached on design and suggestions (as JSON), number of simulations and seed."""
+    design = Design.model_validate_json(design_json)
+    return run(design, session_catalogue(suggestions_json), n_sims, seed)
 
 
 @st.cache_data(show_spinner="Comparing with the same design without dropout…", max_entries=16)
-def dropout_table(design_json: str, n_sims: int, seed: int) -> pd.DataFrame:
+def dropout_table(design_json: str, suggestions_json: str, n_sims: int, seed: int) -> pd.DataFrame:
     design = Design.model_validate_json(design_json)
-    return report.dropout_report(design, base_catalogue(), n_sims, seed)
+    return report.dropout_report(design, session_catalogue(suggestions_json), n_sims, seed)
 
 
 @st.cache_data(show_spinner="Running the tornado (about 1 s)…", max_entries=16)
-def tornado_table(design_json: str, seed: int, n_sims: int = 2_000) -> pd.DataFrame:
+def tornado_table(
+    design_json: str, suggestions_json: str, seed: int, n_sims: int = 2_000
+) -> pd.DataFrame:
     design = Design.model_validate_json(design_json)
-    return report.tornado(design, base_catalogue(), n_sims, seed)
+    return report.tornado(design, session_catalogue(suggestions_json), n_sims, seed)
 
 
 # --------------------------------------------------------------------------- #
@@ -120,7 +135,9 @@ def headline(result: SimulationResult, budget: float | None) -> None:
         st.info(f"P(total cost ≤ {eur(budget)}) = {np.mean(result.total <= budget):.0%}")
 
 
-def results_tab(result: SimulationResult, design_json: str, n_sims: int, seed: int) -> None:
+def results_tab(
+    result: SimulationResult, design_json: str, suggestions_json: str, n_sims: int, seed: int
+) -> None:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**Total cost** (EUR 2026)")
@@ -146,7 +163,7 @@ def results_tab(result: SimulationResult, design_json: str, n_sims: int, seed: i
         )
 
     st.markdown("#### Cost of dropout")
-    dp = dropout_table(design_json, n_sims, seed)
+    dp = dropout_table(design_json, suggestions_json, n_sims, seed)
     d1, d2, d3 = st.columns(3)
     d1.metric(
         "Completers (P50)",
@@ -171,7 +188,7 @@ def results_tab(result: SimulationResult, design_json: str, n_sims: int, seed: i
     )
     if st.button("Compute tornado", key="tornado_button") or st.session_state.get("tornado_on"):
         st.session_state["tornado_on"] = True
-        tt = tornado_table(design_json, seed)
+        tt = tornado_table(design_json, suggestions_json, seed)
         st.altair_chart(charts.tornado(tt), width="stretch")
         with st.expander("Table"):
             st.dataframe(tt.drop(columns=["base"]).round(0))
@@ -186,20 +203,30 @@ def main() -> None:
     )
     base, base_name, n_sims, seed, budget = sidebar()
     header = st.container()  # filled after the editor has run
-    tab_results, tab_design, tab_compare = st.tabs(["Results", "Design", "Compare scenarios"])
+    tab_results, tab_design, tab_compare, tab_assumptions = st.tabs(
+        ["Results", "Design", "Compare scenarios", "Assumptions & suggestions"]
+    )
     with tab_design:
         design = design_editor(base, base_name, base_catalogue())
-    design_json = design.model_dump_json()
-    result = simulate(design_json, n_sims, seed)
+    design_json, suggestions_json = design.model_dump_json(), active_json()
+    result = simulate(design_json, suggestions_json, n_sims, seed)
     with header:
         headline(result, budget)
         if design != base:
             st.caption(f"Edited from `{base_name}` (see the Design tab).")
-        save_control(design)
+        if n := len(active()):
+            st.warning(
+                f"{n} reviewer suggestion(s) active: results use them instead of the published "
+                "catalogue (Assumptions & suggestions tab)."
+            )
+        save_control(design, suggestions_json)
     with tab_results:
-        results_tab(result, design_json, n_sims, seed)
+        results_tab(result, design_json, suggestions_json, n_sims, seed)
     with tab_compare:
-        compare_tab(lambda dj: simulate(dj, n_sims, seed), eur)
+        compare_tab(lambda dj, sj: simulate(dj, sj, n_sims, seed), eur)
+    with tab_assumptions:
+        share = result.costs.by("item").mean(axis=1) / result.total.mean()
+        assumptions_tab(base_catalogue(), session_catalogue(suggestions_json), share)
 
 
 main()
