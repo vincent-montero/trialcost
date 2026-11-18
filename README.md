@@ -3,7 +3,7 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run. **No engine yet.**
+> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding in place (engine step 1/6). **No engine yet.**
 > Personal project, built exclusively from public sources.
 
 ---
@@ -366,6 +366,13 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Engine step 1: repository and package scaffolding
+- Done: `git init`; uv library package `trialcost` (`pyproject.toml`, `uv.lock`, `.python-version` = 3.13, `requires-python >= 3.11`); runtime deps pydantic, numpy, pandas, pyyaml; dev deps pytest, ruff; ruff + pytest config; `.gitignore`; `src/trialcost/__init__.py` (`DATA_DIR`); `tests/test_smoke.py`; empty `designs/`.
+- Decisions: none (tooling only). Ruff excludes `*.md` and `prototype/` so it never reformats the agreed schema in §3 or the throwaway prototype.
+- Assumptions: none.
+- Results: no change (no engine yet).
+- Next: step 2 — `distributions.py`, `design.py`, archetype YAML. Open questions still pending: override file format, site_management vs monitoring_visit double counting, tornado parameters.
 
 ### 2026-11-18 — Design phase and v0 catalogue (chat with Claude)
 - Done: brainstorm and design decisions (§5), design schema (§3), v0 catalogue in `data/` (4 CSVs), prototype Monte Carlo (`prototype/sanity_check.py`), README and CLAUDE.md.

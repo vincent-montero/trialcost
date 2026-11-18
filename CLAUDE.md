@@ -79,7 +79,7 @@ CLAUDE.md
 ```bash
 uv sync
 uv run pytest
-uv run ruff check . && uv run ruff format .
+uv run ruff check . && uv run ruff format .   # *.md and prototype/ are excluded in pyproject.toml
 uv run python -m trialcost.simulate designs/rare-neuro-ph2-mri-scales.yaml --n-sims 10000 --seed 42
 ```
 
