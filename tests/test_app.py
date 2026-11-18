@@ -32,3 +32,16 @@ def test_switching_design_changes_result(app):
     app.sidebar.selectbox[0].select("ref-cns-ph3-typical").run()
     assert not app.exception
     assert app.metric[0].value != first
+
+
+def test_results_tab_has_charts_and_dropout(app):
+    assert len(app.get("vega_lite_chart")) >= 3  # two histograms + breakdown
+    assert any(m.label == "Cost per completer (P50)" for m in app.metric)
+
+
+def test_breakdown_switch_and_tornado(app):
+    app.radio(key="breakdown_by").set_value("country").run()
+    assert not app.exception
+    app.button(key="tornado_button").click().run()
+    assert not app.exception
+    assert len(app.get("vega_lite_chart")) >= 4

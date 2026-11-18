@@ -10,9 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import charts
 import numpy as np
+import pandas as pd
 import streamlit as st
 
+from trialcost import report
 from trialcost.catalogue import Catalogue, load_catalogue
 from trialcost.design import Design, load_design
 from trialcost.simulate import SimulationResult, run
@@ -43,6 +46,18 @@ def design_files() -> dict[str, Path]:
 def simulate(design_json: str, n_sims: int, seed: int) -> SimulationResult:
     """Cached on the design (as JSON), number of simulations and seed."""
     return run(Design.model_validate_json(design_json), base_catalogue(), n_sims, seed)
+
+
+@st.cache_data(show_spinner="Comparing with the same design without dropout…", max_entries=16)
+def dropout_table(design_json: str, n_sims: int, seed: int) -> pd.DataFrame:
+    design = Design.model_validate_json(design_json)
+    return report.dropout_report(design, base_catalogue(), n_sims, seed)
+
+
+@st.cache_data(show_spinner="Running the tornado (about 1 s)…", max_entries=16)
+def tornado_table(design_json: str, seed: int, n_sims: int = 2_000) -> pd.DataFrame:
+    design = Design.model_validate_json(design_json)
+    return report.tornado(design, base_catalogue(), n_sims, seed)
 
 
 # --------------------------------------------------------------------------- #
@@ -103,6 +118,63 @@ def headline(result: SimulationResult, budget: float | None) -> None:
         st.info(f"P(total cost ≤ {eur(budget)}) = {np.mean(result.total <= budget):.0%}")
 
 
+def results_tab(result: SimulationResult, design_json: str, n_sims: int, seed: int) -> None:
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Total cost** (EUR 2026)")
+        st.altair_chart(charts.histogram(result.total, "Total cost"), width="stretch")
+    with c2:
+        st.markdown("**Duration**, study start to CSR (months)")
+        st.altair_chart(
+            charts.histogram(result.duration, "Duration (months)", money=False),
+            width="stretch",
+        )
+
+    st.markdown("#### Where the money goes")
+    by = st.radio(
+        "Break down by", ["category", "resource", "country"], horizontal=True, key="breakdown_by"
+    )
+    table = report.breakdown(result, by)
+    st.caption("Bar = mean cost; whisker = P10-P90 across simulated trials.")
+    st.altair_chart(charts.breakdown(table, by), width="stretch")
+    with st.expander("Table"):
+        st.dataframe(
+            table.assign(share=100 * table["share"]).round(0),
+            column_config={"share": st.column_config.NumberColumn("share %", format="%.1f")},
+        )
+
+    st.markdown("#### Cost of dropout")
+    dp = dropout_table(design_json, n_sims, seed)
+    d1, d2, d3 = st.columns(3)
+    d1.metric(
+        "Completers (P50)",
+        f"{dp.loc['completers', 'P50']:.1f} of {result.design.n_randomised}",
+    )
+    d2.metric(
+        "Cost per completer (P50)",
+        eur(dp.loc["cost_per_completer_eur", "P50"]),
+        delta=f"+{dp.loc['completer_cost_premium_pct', 'P50']:.1f} % vs no dropout",
+        delta_color="inverse",
+    )
+    d3.metric(
+        "Total cost change due to dropout (P50)",
+        eur(dp.loc["dropout_delta_cost_eur", "P50"]),
+        help="Dropouts stop generating visit costs; fixed and time-driven costs stay.",
+    )
+
+    st.markdown("#### Which assumptions matter most")
+    st.caption(
+        "One-way sensitivity on the mean total cost: each input moves to its P10 then P90 "
+        "(0.5x / 1.5x if it is fixed) while the others keep their uncertainty."
+    )
+    if st.button("Compute tornado", key="tornado_button") or st.session_state.get("tornado_on"):
+        st.session_state["tornado_on"] = True
+        tt = tornado_table(design_json, seed)
+        st.altair_chart(charts.tornado(tt), width="stretch")
+        with st.expander("Table"):
+            st.dataframe(tt.drop(columns=["base"]).round(0))
+
+
 def main() -> None:
     st.title("Clinical trial cost estimator")
     st.caption(
@@ -111,8 +183,12 @@ def main() -> None:
         "orders of magnitude with honest uncertainty, not quotes."
     )
     design, n_sims, seed, budget = sidebar()
-    result = simulate(design.model_dump_json(), n_sims, seed)
+    design_json = design.model_dump_json()
+    result = simulate(design_json, n_sims, seed)
     headline(result, budget)
+    (tab_results,) = st.tabs(["Results"])
+    with tab_results:
+        results_tab(result, design_json, n_sims, seed)
 
 
 main()
