@@ -12,8 +12,8 @@ Engine v0, 5,000 simulations per design, seed 42. Benchmarks inflated to 2026 wi
 | Median pivotal trial cost per patient-visit | `ref-cns-ph3-typical` | cost_per_patient_visit (median) | €4.0k | €4.3k / €5.0k / €6.3k | €5.0k | 1.27 | no | fair |
 | Median phase II trial cost | `ref-cns-ph2-typical` | total_cost (median) | €9.91M | €10.29M / €12.11M / €14.90M | €12.11M | 1.22 | no | poor |
 | Direct cost per day, phase 2 | `ref-cns-ph2-typical` | cost_per_day (mean) | €21.7k | €8.3k / €10.2k / €12.2k | €10.2k | 0.47 | no | poor |
-| Mean pivotal trial cost, trials with <=100 patients | `rare-neuro-ph2-mri-scales` | total_cost (mean) | €6.55M | €4.26M / €4.89M / €5.97M | €5.03M | 0.77 | no | fair |
-| Uncontrolled orphan trials (<15 patients) | `rare-neuro-ph2-mri-scales` | total_cost (median) | €5.55M | €4.26M / €4.89M / €5.97M | €4.89M | 0.88 | yes | poor |
+| Mean pivotal trial cost, trials with <=100 patients | `rare-neuro-ph2-mri-scales` | total_cost (mean) | €6.55M | €3.91M / €4.51M / €6.14M | €4.85M | 0.74 | no | fair |
+| Uncontrolled orphan trials (<15 patients) | `rare-neuro-ph2-mri-scales` | total_cost (median) | €5.55M | €3.91M / €4.51M / €6.14M | €4.51M | 0.81 | yes | poor |
 | Phase duration, CNS, phase 2 | `ref-cns-ph2-typical` | duration_months (mean) | 40.1 mo | 29.0 mo / 38.7 mo / 57.1 mo | 41.4 mo | 1.03 | yes | fair |
 | Phase duration, all areas, phase 2 | `ref-cns-ph2-typical` | duration_months (mean) | 34.0 mo | 29.0 mo / 38.7 mo / 57.1 mo | 41.4 mo | 1.22 | yes | poor |
 | Phase duration, CNS, phase 3 | `ref-cns-ph3-typical` | duration_months (mean) | 45.3 mo | 37.4 mo / 48.4 mo / 68.7 mo | 51.3 mo | 1.13 | yes | fair |

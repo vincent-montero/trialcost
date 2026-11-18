@@ -10,7 +10,7 @@ from trialcost.distributions import Fixed
 
 #: Deterministic archetype total, EUR. Regression value: update deliberately when
 #: data or methodology changes, and log the change in the README work log.
-GOLDEN_TOTAL = 4_249_358.83
+GOLDEN_TOTAL = 3_883_077.05
 
 
 def line(costs, item, country):
@@ -27,8 +27,8 @@ def test_golden_total(design, cat):
     assert costs.total()[0] == pytest.approx(GOLDEN_TOTAL, abs=0.01)
 
 
-def test_hand_checked_lines(design, cat):
-    q, costs = run_pipeline(design, cat)
+def test_hand_checked_lines(hand, cat):
+    q, costs = run_pipeline(hand, cat)
     k = q.countries.index
     # time-driven: 12,000 EUR/month x T_total
     assert line(costs, "project_management", "GLOBAL")[0] == pytest.approx(12_000 * q.t_total[0])
@@ -136,7 +136,7 @@ def test_stochastic_archetype_regression_band(design, cat):
     """P50 regression band (CLAUDE.md). Update deliberately if data changes."""
     _, costs = run_pipeline(design, cat, n_sims=10_000, seed=42, deterministic=False)
     p50 = np.median(costs.total())
-    assert 4.7e6 < p50 < 5.1e6  # recentred 2026-11-18 after D31 (P50 4.88M)
+    assert 4.3e6 < p50 < 4.7e6  # recentred 2026-11-18 after CT.gov priors (P50 4.50M)
     assert math.isfinite(costs.total().max())
 
 
@@ -147,8 +147,8 @@ def _items(costs):
     return set(costs.meta["item"])
 
 
-def test_risk_based_monitoring_lines(design, cat):
-    q, costs = run_pipeline(design, cat)
+def test_risk_based_monitoring_lines(hand, cat):
+    q, costs = run_pipeline(hand, cat)
     assert {"monitoring_visit", "central_monitoring", "rbm_setup", "rbm_extra_queries"} <= _items(
         costs
     )
@@ -161,9 +161,9 @@ def test_risk_based_monitoring_lines(design, cat):
     )
 
 
-def test_full_sdv_monitoring_lines(design, cat):
-    design.operations.monitoring = "full_sdv"
-    q, costs = run_pipeline(design, cat)
+def test_full_sdv_monitoring_lines(hand, cat):
+    hand.operations.monitoring = "full_sdv"
+    q, costs = run_pipeline(hand, cat)
     assert "monitoring_visit_full_sdv" in _items(costs)
     assert not {"monitoring_visit", "central_monitoring", "rbm_setup"} & _items(costs)
     de = q.countries.index("DE")
@@ -181,15 +181,15 @@ def test_full_sdv_costs_more_at_same_interval_and_much_more_monthly(design, cat)
     assert rbm < sdv < sdv_monthly
 
 
-def test_interim_analyses(design, cat):
-    _, costs = run_pipeline(design, cat)
+def test_interim_analyses(hand, cat):
+    _, costs = run_pipeline(hand, cat)
     assert not {"interim_analysis", "interim_dmc_review"} & _items(costs)  # n = 0
-    design.operations.n_interim_analyses = 2
-    _, costs = run_pipeline(design, cat)
+    hand.operations.n_interim_analyses = 2
+    _, costs = run_pipeline(hand, cat)
     assert line(costs, "interim_analysis", "GLOBAL")[0] == 2 * 28_000
     assert line(costs, "interim_dmc_review", "GLOBAL")[0] == 2 * 25_000
-    design.operations.dmc = False
-    _, costs = run_pipeline(design, cat)
+    hand.operations.dmc = False
+    _, costs = run_pipeline(hand, cat)
     assert "interim_dmc_review" not in _items(costs)
 
 

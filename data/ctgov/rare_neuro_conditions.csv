@@ -1,0 +1,23 @@
+condition_term,group,notes
+amyotrophic lateral sclerosis,motor neuron,
+spinal muscular atrophy,motor neuron,
+Duchenne muscular dystrophy,muscular dystrophy,
+Becker muscular dystrophy,muscular dystrophy,
+facioscapulohumeral muscular dystrophy,muscular dystrophy,
+myotonic dystrophy,muscular dystrophy,
+Huntington disease,neurodegenerative,
+Friedreich ataxia,ataxia,
+spinocerebellar ataxia,ataxia,
+multiple system atrophy,neurodegenerative,
+progressive supranuclear palsy,neurodegenerative,
+Rett syndrome,neurodevelopmental,
+Angelman syndrome,neurodevelopmental,
+Dravet syndrome,epileptic encephalopathy,
+Lennox-Gastaut syndrome,epileptic encephalopathy,
+Charcot-Marie-Tooth disease,peripheral neuropathy,
+transthyretin amyloid polyneuropathy,peripheral neuropathy,hATTR polyneuropathy
+chronic inflammatory demyelinating polyneuropathy,peripheral neuropathy,CIDP
+myasthenia gravis,neuromuscular junction,Prevalence ~1-2/10000: below the EU 5/10000 rare threshold
+neuromyelitis optica,neuroinflammatory,NMOSD
+adrenoleukodystrophy,leukodystrophy,
+metachromatic leukodystrophy,leukodystrophy,

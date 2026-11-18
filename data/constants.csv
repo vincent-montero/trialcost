@@ -3,3 +3,4 @@ fx_usd_per_eur,Fixed exchange rate,USD/EUR,1.15,1.15,1.15,C,"Decision D12; round
 closeout_months,LPLV to CSR (database lock + analysis + CSR),months,6,6,6,D,Assumption,README §2.4 / §6 #8; fixed for now
 raters_per_site,Certified raters per site for clinician-rated scales,raters/site,2,2,2,D,Assumption,README §6 #10; drives rater_certification (per_rater)
 dmc_meeting_interval_months,Months between DMC meetings,months,6,6,6,D,Assumption,README §6 #10 says per 6 months of conduct; study_items note says of treatment period: exposure window to be fixed in costing
+site_open_fraction,Average fraction of the recruitment window during which a listed site is open,fraction,0.6,0.75,0.9,D,Assumption,"Converts CT.gov crude rate (N / sites / window) into a rate per open site-month (ctgov.py). Sites keep opening during recruitment; the deterministic archetype has 0.96 because its activations cluster. Fit also reports crude rates (f = 1)"

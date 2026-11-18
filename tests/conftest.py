@@ -10,6 +10,7 @@ from trialcost.quantities import compute_quantities
 from trialcost.recruitment import simulate_recruitment
 
 ARCHETYPE = Path(__file__).resolve().parents[1] / "designs" / "rare-neuro-ph2-mri-scales.yaml"
+HAND_CHECK = Path(__file__).resolve().parent / "fixtures" / "hand-check.yaml"
 
 
 @pytest.fixture(scope="session")
@@ -19,8 +20,14 @@ def cat():
 
 @pytest.fixture
 def design():
-    """Fresh archetype for each test (tests may mutate it)."""
+    """Fresh archetype for each test (tests may mutate it). Golden / regression tests."""
     return load_design(ARCHETYPE)
+
+
+@pytest.fixture
+def hand():
+    """Frozen design with round values for hand-calculated tests (tests/fixtures)."""
+    return load_design(HAND_CHECK)
 
 
 def run_pipeline(design, cat, n_sims=1, seed=0, deterministic=True):

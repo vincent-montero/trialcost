@@ -68,11 +68,11 @@ def test_breakdown_shares_sum_to_one(result, by):
     assert b["mean"].is_monotonic_decreasing
 
 
-def test_dropout_report_deterministic(design, cat):
-    dp = report.dropout_report(design, cat, 1, seed=0, deterministic=True)
+def test_dropout_report_deterministic(hand, cat):
+    dp = report.dropout_report(hand, cat, 1, seed=0, deterministic=True)
     h = dropout_hazard(np.array([0.15]))[0]
     assert dp.loc["completers", "P50"] == pytest.approx(
-        50 * math.exp(-h * design.patient_duration_months)
+        50 * math.exp(-h * hand.patient_duration_months)
     )
     assert dp.loc["dropout_delta_cost_eur", "P50"] < 0  # dropouts stop generating visit costs
     assert dp.loc["completer_cost_premium_pct", "P50"] > 0  # but each completer costs more
@@ -128,4 +128,4 @@ def test_cli_end_to_end(tmp_path, capsys):
 def test_cli_deterministic_skips_tornado(capsys):
     assert main([str(ARCHETYPE), "--deterministic", "--n-sims", "1"]) == 0
     text = capsys.readouterr().out
-    assert "Tornado" not in text and "4.25 M€" in text
+    assert "Tornado" not in text and f"{GOLDEN_TOTAL / 1e6:,.2f} M€" in text

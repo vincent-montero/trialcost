@@ -101,13 +101,13 @@ def test_site_countries(design):
     assert list(sc[:5]) == ["FR"] * 4 + ["DE"]
 
 
-def test_deterministic_archetype_by_hand(design, cat):
+def test_deterministic_archetype_by_hand(hand, cat):
     """Modes: FR/ES/US open at 5 (10 sites), DE at 6 (3), IT at 8 (2); rate 0.25 each.
 
     M(6) = 10 * 0.25 * 1 = 2.5; M(8) = 2.5 + 13 * 0.25 * 2 = 9;
     then slope 15 * 0.25 = 3.75, so T_LPI = 8 + (50 - 9) / 3.75 = 18.933 months.
     """
-    rec = simulate_recruitment(design, cat, np.random.default_rng(0), 3, deterministic=True)
+    rec = simulate_recruitment(hand, cat, np.random.default_rng(0), 3, deterministic=True)
     np.testing.assert_allclose(rec.t_lpi, 8 + 41 / 3.75)
     np.testing.assert_allclose(rec.patients.sum(axis=1), 50)
 

@@ -3,7 +3,7 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, **engine v0 complete** (design → recruitment → quantities → costs → report, CLI) and **first benchmark validation done** (§7.2); no UI yet. **No engine yet.**
+> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, **engine v0 complete** (design → recruitment → quantities → costs → report, CLI) **first benchmark validation done** (§7.2) and **recruitment / dropout priors from ClinicalTrials.gov** for rare neuro (§2.4); no UI yet. **No engine yet.**
 > Personal project, built exclusively from public sources.
 
 ---
@@ -71,6 +71,8 @@ Four cost layers, each with its own driver:
 
 - **Site activation**: per-site delay from study start, drawn per country (triangular).
 - **Recruitment**: Poisson–gamma model (Anisimov & Fedorov): site rate λᵢ ~ Gamma(shape, shape / rate_mean); a site recruits only once active. Gives a distribution of T_recruit.
+  - **Priors from ClinicalTrials.gov** (`src/trialcost/ctgov.py`, D37–D38): per trial, rate = N / (sites × T_recruit × f) with T_recruit = (primary completion − start) − longest primary time frame and f = average fraction of the window a site is open (`constants.csv`, 0.75, grade D). A log-normal across trials gives the segment's `rate_mean` prior (between-trial variability). Dropout from posted participant flow (first period, primary period ≥ 6 months), annualised with the constant hazard, fitted to a Beta by moments. Output `data/recruitment_priors.csv`; every trial with its exclusion reason in `data/ctgov/rare_neuro_trials.csv`.
+  - Rare neuro priors (snapshot 2026-11-18): **phase 2** rate median 0.40 pts/open site/month, gsd 2.53 (114 trials); dropout mean 24.3 %/year, κ 2.42 (34 trials). Phase 3: 0.28, gsd 2.85 (90). Terminated trials recruit ~40 % slower than completed (0.24 vs 0.38).
   - `rate_mean` is drawn **once per simulated trial** and shared by its sites (uncertainty about the indication moves all sites together); `rate_shape` sets the between-site spread (CV = 1/√shape).
   - **Exact computation, no time grid**: expected randomised by month t is M(t) = Σᵢ λᵢ·(t − aᵢ)⁺ (piecewise linear). By the time-change theorem, T_LPI = M⁻¹(S) with S ~ Gamma(N, 1); M⁻¹ is solved segment by segment. Checked against a brute-force simulation of the arrival times in the tests.
   - **Patients per site** = exact conditional expectation given T_LPI: the first N − 1 patients split in proportion to λᵢ·(T_LPI − aᵢ)⁺, the N-th in proportion to λᵢ of sites open at T_LPI. Fractional counts, each simulation sums to N (costs are linear in patients, so integer draws would only add noise).
@@ -233,7 +235,7 @@ Planned helper for quick mode: `visits_every(weeks=4, until=52, procedures=[...]
 
 ### First archetype: `rare-neuro-ph2-mri-scales`
 
-Phase 2, rare neurological disease, N = 50 (1:1 placebo), 52-week treatment + 4-week follow-up, 8 visits (2 remote), brain MRI at screening/W24/W52, clinician scale and PRO, PK at BL/W12; 15 sites: FR 4, DE 3, ES 3, IT 2, US 3; SF 35 %, dropout 15 %/year, recruitment median 0.25 pt/site/month (gsd 1.6, shape 1.5); central imaging reading and DMC on. Population and recruitment values are **placeholders**, to be replaced by ClinicalTrials.gov-derived priors.
+Phase 2, rare neurological disease, N = 50 (1:1 placebo), 52-week treatment + 4-week follow-up, 8 visits (2 remote), brain MRI at screening/W24/W52, clinician scale and PRO, PK at BL/W12; 15 sites: FR 4, DE 3, ES 3, IT 2, US 3; SF 35 % (placeholder), dropout Beta(mean 24.3 %/year, κ 2.42) and recruitment rate LogNormal(median 0.40 pts/open site/month, gsd 2.53) from the ClinicalTrials.gov rare-neuro phase 2 priors, between-site shape 1.5 (placeholder); central imaging reading and DMC on.
 
 ---
 
@@ -249,6 +251,8 @@ Files in `data/` (EUR, price year 2026):
 | `benchmarks.csv` | 13 published benchmarks (costs and phase durations), used for validation only |
 | `benchmark_checks.csv` | Which design and metric each benchmark is compared with, statistic, comparability (validation only) |
 | `price_indices.csv` | US CPI-U Medical Care annual values, to inflate USD benchmarks to 2026 (validation only) |
+| `recruitment_priors.csv` | Recruitment-rate and dropout priors by segment / phase / status, derived from ClinicalTrials.gov (D37–D38); copied into designs by hand |
+| `ctgov/` | Condition list (editable), raw API snapshot (`.json.gz`) and per-trial table with exclusion reasons |
 | `sponsor_model_factors.csv` | Multipliers on CRO-delivered labour for `functional` (FSP) and `in_house` sponsor models (D31) |
 | `procedure_overrides.csv` | Country-specific procedure prices replacing *FR price × site index* (1 row: US brain MRI) |
 | `constants.csv` | 4 engine-level parameters (FX rate, close-out months, raters per site, DMC meeting interval), same `low/mode/high` + grade columns |
@@ -306,6 +310,9 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D34 | No SciPy: the Beta quantile (tornado only) is computed in pure Python (incomplete beta continued fraction + bisection), tested against 1M samples | Adding the dependency was blocked in this session; the function is short and isolated, SciPy can replace it later |
 | D35 | **Benchmark validation by reference designs**: each benchmark compared with a design resembling the trials it summarises (`benchmark_checks.csv`), USD inflated with the US CPI-U Medical Care index (`price_indices.csv`) then converted at the fixed FX; results reported in `reports/benchmark-validation.md`, never asserted | Follows D5 (benchmarks are mixtures of designs); ASPE inflated with the same index; CLAUDE.md: benchmarks are checked in a separate report |
 | D36 | Reference designs live in `designs/ref-*.yaml`; they are **validation fixtures, not archetypes** | Keeps archetypes (user-facing starting points) separate from designs tuned to match published averages |
+| D37 | **ClinicalTrials.gov query for rare-neuro priors** (agreed with Vincent): curated condition list (`data/ctgov/rare_neuro_conditions.csv`, 22 diseases), interventional, phase 2 / 2-3 / 3, randomised, industry lead sponsor, start ≥ 2010, COMPLETED or TERMINATED, actual enrollment; dropout from posted results | Closest to the archetype; terminated trials kept to avoid survivorship bias (they recruit ~40 % slower) |
+| D38 | **Estimation rules**: rate per open site-month with f = 0.75; exclude phase 1/2, < 2 listed sites (generic placeholder locations), T_recruit < 3 months, unparseable time frames; dropout only from first participant-flow period ≥ 6 months; log-normal / Beta fits; archetype uses the **phase 2** subset | Removes artefacts seen in the data (e.g. 144–421 patients at "1 site"; 1-month windows); keeps every trial and its exclusion reason in the trial table |
+| D39 | **Hand-calculated tests use a frozen fixture** (`tests/fixtures/hand-check.yaml`, round values); golden total and P50 band stay on the live archetype and are updated deliberately | Data updates no longer break hand arithmetic; regression tests still flag every change |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -329,12 +336,15 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 12. **German BfArM fee** not found: CTA range = ethics fees + assumed €3–10k.
 13. **Italy**: labour cost, fees and site index not verified.
 14. **Excluded**: IMP manufacturing, sponsor internal staff, VAT, inflation indexing, explicit CRO margin (embedded in rates).
-15. **Beta concentration κ = 20** for screen-failure and dropout rates in the archetype (SD ≈ 0.10 and 0.08), inherited from the prototype. Placeholder until ClinicalTrials.gov priors.
+15. **Beta concentration κ = 20** for the screen-failure rate in the archetype (SD ≈ 0.10), inherited from the prototype; still a placeholder (ClinicalTrials.gov does not report screen failures). Dropout now uses the CT.gov prior (D37).
 16. **Driver vs label overlaps (accepted, D30)**: `edc_hosting` is charged over the whole study, so it may overlap the year-1 licence in `edc_build_licence` (≤ ~€18k at mode); `pharmacy_annual` counts every active site-year, so FR year 1 overlaps `site_fixed_fees_fr` (≤ ~€500 per FR site). Labels reworded to say what is counted.
 17. **Operational options (D31, §2.9)**: risk-based hours (central monitoring 8/16/32 h per conduct month, set-up 40/80/160 h) are assumptions; full-SDV visit length ratio 1.17–1.49 from ADAMON; FSP factor 0.65/0.80/0.95 rests on analyst/vendor claims only (weakest number of the set); in-house factor depends on §6 #1 (CRO multiplier) and an assumed utilisation 0.60–0.85; interim analysis = 40 % of `db_lock` + 20 % of `biostatistics` (assumed fractions); the site's own monitoring fee does not grow with longer full-SDV visits.
 18. **All planned sites cost start-up and close-out**, even when a simulated site recruits nobody (late activation); site-months still stop at LPLV.
 19. **Reference designs for validation** (`designs/ref-cns-ph2-typical.yaml`, `ref-cns-ph3-typical.yaml`): N and phase duration from ASPE 2024 Table 2; everything else assumed (1:1 placebo; 24 / 52 weeks of treatment; generic CNS assessments without imaging; 40 / 90 sites, US-weighted; SF 40 %; dropout 30 / 25 % per year; 0.30 / 0.25 patients per site-month).
 20. **Benchmark price years**: Moore 2018 (no price year stated) taken as 2016 USD; Martin 2017 as 2015 USD; the 2026 index value is H1 2026 (latest available). A one-year shift changes the converted values by about 2–4 %.
+21. **Site open fraction f = 0.75** (0.6–0.9) converts CT.gov crude rates into rates per open site-month; the rate prior scales with 1/f (crude median 0.29 for phase 2). Not propagated as uncertainty: the tornado's rate swing covers it.
+22. **CT.gov prior spreads include measurement noise** (window estimate, incomplete site lists), so gsd 2.5 and κ 2.4 probably overstate true between-trial variability; they are wide, i.e. conservative. Dropout annualised with a constant hazard from periods ≥ 6 months; front-loaded dropout would make it slightly high for long trials.
+23. **Trial-size bias of the prior**: the fit pools rare-neuro trials of all sizes and indications (median 23 sites, 97 patients); per-indication priors are possible from the same table but small samples.
 
 ---
 
@@ -376,14 +386,14 @@ Full table: `reports/benchmark-validation.md` (regenerate with `uv run python -m
 | Martin phase II, median trial €9.9M | same | median €12.1M | 1.22 (poor match: median trial size unknown) |
 | ASPE CNS phase 3, mean per patient €42.1k | `ref-cns-ph3-typical` (529 pts) | mean €53.8k | **1.28** |
 | Moore pivotal, median trial €21.1M / per patient €45.7k / per patient-visit €4.0k | same (Moore median N = 488) | €27.7M / €52.4k / €5.0k | **1.31 / 1.15 / 1.27** |
-| Moore pivotal ≤ 100 patients, mean trial €6.55M | archetype (50 pts) | mean €5.03M | **0.77** |
+| Moore pivotal ≤ 100 patients, mean trial €6.55M | archetype (50 pts) | mean €4.85M (was €5.03M before CT.gov priors) | **0.74** (was 0.77) |
 | ASPE phase durations: CNS ph2 40.1, CNS ph3 45.3 months | reference designs | 41.4 / 51.3 months | 1.03 / 1.13 |
 | Tufts phase 2 direct cost per day €21.7k | `ref-cns-ph2-typical` | €10.2k | 0.47 (poor match: day base undefined) |
 
 **Reading**
 - **Mid-size phase 2: in range.** Per-patient cost matches ASPE CNS almost exactly; all-areas is higher because it includes costlier areas (haematology, oncology). Durations are consistent.
 - **Large / long trials: model ~15–30 % high.** ASPE has phase 3 CNS **19 % cheaper per patient** than phase 2; the model has it 5 % dearer. The difference sits in time-driven costs: the 52-week reference keeps sites open 6.7 site-months per patient (4.9 in phase 2) and every site-month is charged at the same rate (site management, monitoring visits, central monitoring).
-- **Small trials: model ~20–25 % low.** The archetype is below Moore's mean for pivotal trials with ≤ 100 patients (a mean, pulled up by expensive trials, so the gap may be smaller against a median).
+- **Small trials: model ~20–25 % low** (0.74 after the CT.gov priors made the archetype recruit faster). The archetype is below Moore's mean for pivotal trials with ≤ 100 patients (a mean, pulled up by expensive trials, so the gap may be smaller against a median).
 - **Together**: the model looks **too flat across trial size**: it may under-cost fixed / small-trial overheads and over-cost time-driven site costs in long, large trials. Candidate causes, to check in the operational review (roadmap #4): monitoring frequency that falls during long maintenance phases (risk-based monitoring), CRO site-management rates per site-month, and study-level fixed costs (protocol, regulatory, data management set-up) for small trials.
 - **Not conclusive**: benchmarks are averages over mixtures of designs, the reference designs are assumptions (§6 #19), and all benchmarks are US-centric.
 
@@ -392,7 +402,7 @@ Full table: `reports/benchmark-validation.md` (regenerate with `uv run python -m
 ## 8. Roadmap
 
 1. ~~Engine v0: vectorised NumPy Monte Carlo, YAML design loader, breakdowns, tornado, dropout-cost report, deterministic "all-at-mode" mode for testing.~~ Done 2026-11-18.
-2. Recruitment priors from ClinicalTrials.gov (enrolment ÷ (sites × recruitment duration) by indication/phase).
+2. ~~Recruitment priors from ClinicalTrials.gov~~ First pass done 2026-11-18 for rare neuro (§2.4). Follow-ups: per-indication priors, a broad-CNS segment for the reference designs, a source for screen failure and between-site heterogeneity (`rate_shape`).
 3. Fix known gaps: Italy, BfArM fee; check site management vs monitoring overlap against real CRO quotes (D26).
 4. One-hour review of defaults by an operational professional (CRA or clinical project manager): CRO rates, monitoring frequency, investigator fees.
 5. ~~Validation: reconstruct per-phase benchmarks from typical designs.~~ First pass done 2026-11-18 (§7.2). Follow-ups: per-site-month time-driven costs in long trials, fixed costs of small trials, more benchmarks (EU, rare disease, phase 2 medians with trial sizes).
@@ -470,6 +480,9 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 - [A] BTA, citing Eurostat 2025 (NL 47.9 €/h) — https://www.bta.bg/en/news/1096069-bulgaria-has-lowest-labour-costs-in-eu-in-2025-but-highest-annual-increase
 - [context] Eurostat news release, hourly labour costs 2025 — https://ec.europa.eu/eurostat/product?code=ddn-20260331-2
 
+### ClinicalTrials.gov
+- [C] ClinicalTrials.gov API v2, query in `src/trialcost/ctgov.py` (snapshot 2026-11-18, 288 studies; `data/ctgov/rare_neuro_snapshot.json.gz`) — https://clinicaltrials.gov/data-api/api
+
 ### Exchange rate
 - [A] Wise, EUR to USD (≈1.16, Nov 2026) — https://wise.com/in/currency-converter/eur-to-usd-rate
 
@@ -484,6 +497,13 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Recruitment and dropout priors from ClinicalTrials.gov (roadmap #2, first pass)
+- Done: `src/trialcost/ctgov.py` (CLI `fetch` / `estimate`; pure parsing and fitting functions); `data/ctgov/rare_neuro_conditions.csv`, `rare_neuro_snapshot.json.gz` (288 studies), `rare_neuro_trials.csv`; `data/recruitment_priors.csv`; constant `site_open_fraction`; archetype population updated (rate and dropout); `tests/fixtures/hand-check.yaml` and hand-calculated tests moved to it; `tests/test_ctgov.py` incl. a check that the committed priors reproduce from the snapshot. 192 tests pass. Benchmark report regenerated.
+- Decisions: D37 (query, agreed with Vincent: curated rare-neuro list, completed + terminated, phase 2–3, randomised, industry, ≥ 2010, dropout from results), D38 (estimation and data-quality rules), D39 (frozen hand-check fixture).
+- Assumptions: §6 #15 updated; #21 (site open fraction), #22 (spreads include measurement noise), #23 (pooled sizes / indications).
+- Results: rare neuro phase 2 prior: rate median 0.40 pts/open site/month (gsd 2.53, 114 trials), dropout 24.3 %/year (κ 2.42, 34 trials); 70 of 288 trials excluded from the rate fit (27 single-site listings, 23 phase 1/2, 18 windows < 3 months, 2 unparseable). Archetype: total P10/P50/P90 €4.27M / 4.89M / 5.96M → **€3.92M / 4.51M / 6.12M**; duration P50 38.5 → 33.3 months (P90 51.8 → 54.4); LPI P50 19.6 → 14.4 months; cost per completer +21.4 % vs no dropout (was +16.6 %); recruitment rate is now the top tornado driver (€1.96M swing). Deterministic golden €4,249,359 → €3,883,077; P50 band 4.7–5.1 → 4.3–4.7 M€. Small-trial benchmark ratio 0.77 → 0.74.
+- Next: Streamlit MVP (roadmap #6, needed for the operational review); per-indication priors; screen-failure source.
 
 ### 2026-11-18 — Benchmark validation report (roadmap #5, first pass)
 - Done: `src/trialcost/validation.py` (CLI `python -m trialcost.validation`), `reports/benchmark-validation.md` / `.csv`; reference designs `designs/ref-cns-ph2-typical.yaml`, `ref-cns-ph3-typical.yaml`; `data/benchmark_checks.csv`, `data/price_indices.csv`; 4 benchmark rows added (Moore ≤ 100 patients mean, 3 ASPE phase durations); `tests/test_validation.py` (runs and converts correctly; no agreement asserted). 175 tests pass. Re-read ASPE 2024 (Table 2 / Table 6) and Moore 2018 (AJMC); medical-care CPI from FRED.

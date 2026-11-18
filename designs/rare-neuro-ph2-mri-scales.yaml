@@ -1,9 +1,9 @@
 # Archetype 1 — rare neurological disease, phase 2, MRI + clinical scales (README §3).
 # Same design as prototype/sanity_check.py, so the engine can be compared to it.
 #
-# PLACEHOLDERS (grade D, README §6): population and recruitment values below are
-# to be replaced by ClinicalTrials.gov-derived priors. Beta concentration kappa = 20
-# (SD ~0.10 on SF, ~0.08 on dropout) is the prototype's choice, not sourced.
+# Recruitment rate and dropout: ClinicalTrials.gov priors, rare neuro phase 2 subset
+# (data/recruitment_priors.csv, grade C, D37-D38). Screen failure and rate_shape remain
+# placeholders (grade D): CT.gov does not report them.
 # activation_months is omitted: each country uses its range in data/countries.csv (D21).
 
 name: rare-neuro-ph2-mri-scales
@@ -56,10 +56,10 @@ countries:
   - {country: US, n_sites: 3}
 
 population:
-  screen_failure_rate: {kind: beta, mean: 0.35, kappa: 20}
-  annual_dropout_rate: {kind: beta, mean: 0.15, kappa: 20}
-  rate_mean: {kind: lognormal, median: 0.25, gsd: 1.6}   # randomised pts / site / month
-  rate_shape: 1.5
+  screen_failure_rate: {kind: beta, mean: 0.35, kappa: 20}   # placeholder (D)
+  annual_dropout_rate: {kind: beta, mean: 0.243, kappa: 2.42} # CT.gov prior, 34 trials
+  rate_mean: {kind: lognormal, median: 0.401, gsd: 2.53}      # CT.gov prior, 114 trials; pts / open site / month
+  rate_shape: 1.5                                             # placeholder (D)
 
 operations:
   sponsor_model: full_cro

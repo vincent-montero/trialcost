@@ -34,6 +34,8 @@ data/                    # source of truth for all numbers
   benchmarks.csv         # validation only, never used in estimates
   benchmark_checks.csv   # benchmark -> reference design + metric (validation only)
   price_indices.csv      # US CPI medical care, to inflate USD benchmarks (validation only)
+  recruitment_priors.csv # CT.gov-derived rate / dropout priors (copied into designs by hand)
+  ctgov/                 # condition list, raw API snapshot, per-trial table
   procedure_overrides.csv  # country-specific procedure prices (D25)
   sponsor_model_factors.csv  # labour multipliers for functional / in_house sponsor models (D31)
   constants.csv          # engine-level numbers: FX, close-out months, raters/site, DMC interval
@@ -50,6 +52,7 @@ src/trialcost/
   simulate.py            # Monte Carlo orchestration, returns tidy results
   report.py              # quantiles, breakdowns, tornado, dropout-cost report
   validation.py          # benchmark validation report (never asserted in tests)
+  ctgov.py               # ClinicalTrials.gov fetch (network) + priors estimation (offline)
 reports/                 # generated reports (benchmark-validation.md), regenerate, don't hand-edit
 tests/
 prototype/sanity_check.py  # throwaway loop-based prototype; reference only, do not extend
@@ -77,7 +80,7 @@ CLAUDE.md
 
 ## Testing
 
-- **Deterministic mode**: every distribution at its mode / median → golden test on the archetype (hand-checkable totals).
+- **Deterministic mode**: every distribution at its mode / median → golden test on the archetype. Hand-calculated tests use the frozen `tests/fixtures/hand-check.yaml` (D39), never the live archetype, so data updates only move the golden total and the P50 band (update both deliberately and log before → after).
 - Invariants: cost increases with N, number of sites, visit count, monitoring frequency; zero dropout ≥ visits of positive dropout; removing central imaging removes all `imaging_*` lines.
 - Catalogue validation tests: grades ∈ {A,B,C,D}, sources non-empty, low ≤ mode ≤ high, all procedure IDs in designs exist.
 - Regression: P50 of the archetype stays within a tolerance band unless data changes (update the band deliberately).
@@ -91,6 +94,7 @@ uv run pytest
 uv run ruff check . && uv run ruff format .   # *.md and prototype/ are excluded in pyproject.toml
 uv run python -m trialcost.simulate designs/rare-neuro-ph2-mri-scales.yaml --n-sims 10000 --seed 42
 uv run python -m trialcost.validation --out reports   # benchmark validation report
+uv run python -m trialcost.ctgov fetch && uv run python -m trialcost.ctgov estimate   # refresh CT.gov priors (network)
 # simulate options: --deterministic --budget 5e6 --recruit-by 24 --tornado-sims 2000 --no-tornado --out results/ --lines
 ```
 
@@ -116,4 +120,4 @@ Vincent wants a running record of the work as the project moves forward. At the 
 - Propose a short plan before multi-file changes; implement in small, reviewable commits.
 - Be honest and precise: say when a number is weak, when results look off against benchmarks, or when a modelling shortcut is taken.
 - When showing code in chat, prefer short inline copy-pasteable snippets.
-- Open questions to raise rather than decide alone: how to expose the tornado (which parameters, ranges); first ClinicalTrials.gov query design for recruitment priors.
+- Open questions to raise rather than decide alone: how to expose the tornado (which parameters, ranges); any change to the ClinicalTrials.gov query (D37) or estimation rules (D38).
