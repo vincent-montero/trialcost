@@ -1,0 +1,10 @@
+benchmark_id,description,value,unit,price_year,source
+aspe_cns_ph2_pp,"Average per-patient cost, CNS, phase 2",48767,USD/patient,2018,"ASPE 2024 'Examination of clinical trial costs', Table 6"
+aspe_all_ph2_pp,"Average per-patient cost, all areas, phase 2",58618,USD/patient,2018,"ASPE 2024, Table 6"
+aspe_cns_ph3_pp,"Average per-patient cost, CNS, phase 3",39612,USD/patient,2018,"ASPE 2024, Table 6"
+moore_pivotal_median,Median pivotal trial cost (138 trials),19000000.0,USD/trial,2015-16 trials,Moore et al. JAMA Intern Med 2018
+moore_pivotal_pp,Median pivotal trial cost per patient,41117,USD/patient,2015-16 trials,Moore et al. 2018
+moore_pivotal_ppv,Median pivotal trial cost per patient-visit,3562,USD/patient-visit,2015-16 trials,Moore et al. 2018
+moore_min_orphan,Uncontrolled orphan trials (<15 patients),5000000.0,USD/trial,2015-16 trials,Moore et al. 2018 (via Global Genes)
+martin_ph2_median,Median phase II trial cost,8600000.0,USD/trial,2010-15 trials,Martin et al. Nat Rev Drug Discov 2017 (via Nat Rev Drug Discov 2018 news)
+tufts_ph2_day,"Direct cost per day, phase 2",23737,USD/day,2024,Tufts CSDD 2024 (via Clinical Leader 2026)
