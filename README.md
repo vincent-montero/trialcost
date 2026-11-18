@@ -3,7 +3,7 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema and catalogue loader in place (engine step 3/6). **No engine yet.**
+> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, catalogue loader and recruitment model in place (engine step 4/6). **No engine yet.**
 > Personal project, built exclusively from public sources.
 
 ---
@@ -71,6 +71,11 @@ Four cost layers, each with its own driver:
 
 - **Site activation**: per-site delay from study start, drawn per country (triangular).
 - **Recruitment**: Poisson–gamma model (Anisimov & Fedorov): site rate λᵢ ~ Gamma(shape, shape / rate_mean); a site recruits only once active. Gives a distribution of T_recruit.
+  - `rate_mean` is drawn **once per simulated trial** and shared by its sites (uncertainty about the indication moves all sites together); `rate_shape` sets the between-site spread (CV = 1/√shape).
+  - **Exact computation, no time grid**: expected randomised by month t is M(t) = Σᵢ λᵢ·(t − aᵢ)⁺ (piecewise linear). By the time-change theorem, T_LPI = M⁻¹(S) with S ~ Gamma(N, 1); M⁻¹ is solved segment by segment. Checked against a brute-force simulation of the arrival times in the tests.
+  - **Patients per site** = exact conditional expectation given T_LPI: the first N − 1 patients split in proportion to λᵢ·(T_LPI − aᵢ)⁺, the N-th in proportion to λᵢ of sites open at T_LPI. Fractional counts, each simulation sums to N (costs are linear in patients, so integer draws would only add noise).
+  - Deterministic mode: activation at mode, all λᵢ = median rate_mean, S = N, so M(T_LPI) = N (archetype: 18.93 months by hand).
+  - No upper cap on recruitment duration (the prototype stopped at 120 months): long tails are reported as they are.
 - **Treatment / follow-up**: derived from the visit schedule.
 - **Close-out**: database lock, analysis and CSR, assumed 6 months after LPLV (assumption).
 
@@ -241,6 +246,7 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D21 | **Provisional — revisit.** `CountryAllocation.activation_months` is **optional**: when omitted, the country's range in `countries.csv` is used; a value in the design overrides it | Avoids duplicating catalogue values in every design. To revisit once recruitment priors exist (activation may become indication- or site-type-specific, and the design may need to carry it explicitly) |
 | D22 | Engine-level numbers (FX, close-out, raters per site, DMC interval) live in `data/constants.csv` with the usual grade columns | "No numbers in code" applies to these too |
 | D23 | `study_items.csv` gets a **`country_scaling`** column (`site_price` / `none`), like `procedures.csv`. `site_price` for site-paid items: `pharmacy_annual`, `site_monitoring_fee`, `investigator_fee` (notes said "country-scaled") and the FR-only `site_fixed_fees_fr`, `imaging_site_setup_fr` (no numeric effect: FR index 1, overhead 0). All CRO / vendor items `none` | Previously implicit in notes and prototype code; agreed with Vincent |
+| D24 | Recruitment computed **exactly** (time-change inversion, §2.4) with **fractional expected patients per site** and **no duration cap** | Exact, vectorised (10k sims in ~10 ms), no grid bias; costs are linear in patients |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -375,6 +381,13 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Engine step 4: recruitment model (+ D23 catalogue column)
+- Done: `data/study_items.csv` gains `country_scaling` (D23, separate commit; validated in `catalogue.py`; no other value changed). `src/trialcost/recruitment.py`: per-country site activation (design or `countries.csv`), Poisson–gamma site rates with `rate_mean` shared within a simulated trial, exact T_LPI via `time_to_intensity()` (inverse of the piecewise-linear cumulative intensity at S ~ Gamma(N, 1)), expected patients per site; `Recruitment` result dataclass. `tests/test_recruitment.py` (15 tests: hand examples, brute-force Poisson comparison of T_LPI quantiles and per-site counts, deterministic archetype by hand, monotonicity, reproducibility, timing). 103 tests pass.
+- Decisions: D23 (`country_scaling` in study items), D24 (exact recruitment computation, fractional patients, no cap). §2.4 updated.
+- Assumptions: none new (`rate_mean` shared by sites within a trial, as in the prototype, now stated in §2.4).
+- Results: archetype T_LPI P10/P50/P90 = 12.7 / 19.5 / 32.8 months (prototype implied 13.1 / 19.1 / 33.1); T_total = LPI + 12.88 + 6 → 31.6 / 38.4 / 51.7 (prototype 32 / 38 / 52). P(T_LPI > 60 months) ≈ 0.5 %. Deterministic T_LPI = 18.93 months. Runtime 10k sims ≈ 8 ms.
+- Next: step 5, `quantities.py` + `costing.py`. Open before costing: override file format (US MRI); site_management vs monitoring_visit double counting; DMC exposure window (§6 #10).
 
 ### 2026-11-18 — Engine step 3: catalogue loader and validation
 - Done: `src/trialcost/catalogue.py` (load the 5 CSVs; validate columns, unique IDs, `low <= mode <= high`, non-negative, grades incl. mixed `A/D`, non-empty sources, drivers, scalings, FR reference = index 1 / overhead 0, required constants; all problems reported together in `CatalogueError`; `applies_if` parser with explicit atom classes, no `eval`; `Catalogue` accessors returning `Triangular`; `applicable_items(design, country)`; `check_design()`); new `data/constants.csv`; `activation_months` made optional in `design.py`, removed from the archetype YAML; `tests/test_catalogue.py`. 86 tests pass.
