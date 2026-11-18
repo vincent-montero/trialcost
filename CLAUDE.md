@@ -20,7 +20,7 @@ Design-driven Monte Carlo estimator of a clinical trial's **total sponsor budget
 - Pydantic v2, NumPy, pandas, PyYAML; pytest; ruff (lint + format). Streamlit later (UI is not v0 priority).
 - Code, comments, identifiers and docs in **English**.
 - Units: money in **EUR (price year 2026)**, FX fixed at 1 EUR = 1.15 USD (`data/` constants, not code); time in **months** internally (days only in visit definitions, converted with 30.44 d/month).
-- Randomness: always via a `numpy.random.Generator` passed in explicitly, seeded in tests. No global state.
+- Randomness: always via a `numpy.random.Generator` passed in explicitly, seeded in tests. No global state. Every random input draws from its own child stream (`rng.spawn`, D32): keep it that way when adding inputs, or scenario comparisons (dropout delta, tornado) pick up noise.
 - The engine must be **vectorised over simulations** (arrays of shape `(n_sims,)` or `(n_sims, n_sites)`); no Python loop over simulations. Target: 10,000 sims of the archetype in < 5 s.
 - Small, readable functions with type hints. Vincent reviews the code himself and is more fluent in Python than JS: favour clarity over cleverness, and explain non-obvious maths in docstrings.
 
@@ -85,6 +85,7 @@ uv sync
 uv run pytest
 uv run ruff check . && uv run ruff format .   # *.md and prototype/ are excluded in pyproject.toml
 uv run python -m trialcost.simulate designs/rare-neuro-ph2-mri-scales.yaml --n-sims 10000 --seed 42
+# options: --deterministic --budget 5e6 --recruit-by 24 --tornado-sims 2000 --no-tornado --out results/ --lines
 ```
 
 ## Keeping the project log

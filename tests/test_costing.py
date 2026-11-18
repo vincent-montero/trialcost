@@ -136,7 +136,7 @@ def test_stochastic_archetype_regression_band(design, cat):
     """P50 regression band (CLAUDE.md). Update deliberately if data changes."""
     _, costs = run_pipeline(design, cat, n_sims=10_000, seed=42, deterministic=False)
     p50 = np.median(costs.total())
-    assert 4.6e6 < p50 < 5.0e6
+    assert 4.7e6 < p50 < 5.1e6  # recentred 2026-11-18 after D31 (P50 4.88M)
     assert math.isfinite(costs.total().max())
 
 

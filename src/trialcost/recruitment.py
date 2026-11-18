@@ -30,6 +30,12 @@ exponentials), so::
 activation, pick the segment that contains ``S`` and solve the linear piece.
 Everything is array arithmetic over ``(n_sims, n_sites)``.
 
+Random streams
+--------------
+Each random input gets its own child generator (``rng.spawn``): activation of
+each country, ``rate_mean``, site rates and the Gamma(N, 1) target. Pinning one
+input (tornado, scenarios) then leaves every other draw unchanged (D29).
+
 Deterministic mode
 ------------------
 Activation at its central value, ``rate_mean`` at its median, every site at
@@ -88,11 +94,10 @@ def draw_activation(
     deterministic: bool = False,
 ) -> np.ndarray:
     """Activation month of every site, shape ``(n_sims, n_sites)``."""
+    streams = rng.spawn(len(design.countries))
     blocks = [
-        draw(
-            catalogue.activation_months(design, c.country), rng, (n_sims, c.n_sites), deterministic
-        )
-        for c in design.countries
+        draw(catalogue.activation_months(design, c.country), s, (n_sims, c.n_sites), deterministic)
+        for c, s in zip(design.countries, streams, strict=True)
     ]
     return np.hstack(blocks)
 
@@ -105,11 +110,12 @@ def draw_site_rates(
     deterministic: bool = False,
 ) -> np.ndarray:
     """Per-site rates ``lambda_i``, shape ``(n_sims, n_sites)`` (see module docstring)."""
-    rate_mean = draw(population.rate_mean, rng, n_sims, deterministic)[:, None]
+    s_mean, s_sites = rng.spawn(2)
+    rate_mean = draw(population.rate_mean, s_mean, n_sims, deterministic)[:, None]
     if deterministic:
         return np.broadcast_to(rate_mean, (n_sims, n_sites)).copy()
     shape = population.rate_shape
-    return rng.gamma(shape, rate_mean / shape, (n_sims, n_sites))
+    return s_sites.gamma(shape, rate_mean / shape, (n_sims, n_sites))
 
 
 def time_to_intensity(activation: np.ndarray, rates: np.ndarray, target: np.ndarray) -> np.ndarray:
@@ -161,9 +167,10 @@ def simulate_recruitment(
 ) -> Recruitment:
     """Draw activation, site rates and LPI for ``n_sims`` simulated trials."""
     n = design.n_randomised
-    activation = draw_activation(design, catalogue, rng, n_sims, deterministic)
-    rates = draw_site_rates(design.population, rng, n_sims, design.n_sites, deterministic)
-    target = np.full(n_sims, float(n)) if deterministic else rng.gamma(n, 1.0, n_sims)
+    s_act, s_rates, s_target = rng.spawn(3)
+    activation = draw_activation(design, catalogue, s_act, n_sims, deterministic)
+    rates = draw_site_rates(design.population, s_rates, n_sims, design.n_sites, deterministic)
+    target = np.full(n_sims, float(n)) if deterministic else s_target.gamma(n, 1.0, n_sims)
     t_lpi = time_to_intensity(activation, rates, target)
     return Recruitment(
         site_country=site_countries(design),

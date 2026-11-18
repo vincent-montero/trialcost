@@ -34,3 +34,5 @@ extend-exclude = ["prototype", "*.md"]  # README §3 holds the agreed schema ver
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "NPY", "PD", "SIM", "RUF"]
+# PD011 flags any `.values`, including CostLines.values (a NumPy array): false positives.
+ignore = ["PD011"]

@@ -99,3 +99,36 @@ def test_deterministic_draw_uses_central_value(dist, central, rng):
     x = draw(dist, rng, (3, 2), deterministic=True)
     assert x.shape == (3, 2)
     assert np.all(x == central)
+
+
+@pytest.mark.parametrize(
+    "dist",
+    [
+        Triangular(low=3, mode=5, high=9),
+        Triangular(low=0, mode=0, high=4),  # mode at the edge
+        LogNormal(median=0.25, gsd=1.6),
+        Beta(mean=0.35, kappa=20),
+        Beta(mean=0.15, kappa=20),
+        Beta(mean=0.5, kappa=0.8),  # U-shaped
+    ],
+)
+def test_quantile_matches_samples(dist, rng):
+    x = dist.sample(rng, 1_000_000)
+    for p in (0.1, 0.5, 0.9):
+        assert dist.quantile(p) == pytest.approx(
+            np.quantile(x, p), abs=0.005 * (x.std() + 1e-9) * 10
+        )
+
+
+def test_quantile_exact_values():
+    assert Triangular(low=0, mode=0, high=1).quantile(0.75) == pytest.approx(0.5)
+    assert LogNormal(median=2, gsd=3).quantile(0.5) == pytest.approx(2)
+    assert Beta(mean=0.5, kappa=2).quantile(0.3) == pytest.approx(0.3)  # Beta(1,1) = uniform
+    assert Fixed(value=7).quantile(0.1) == 7
+
+
+def test_point_mass_flag():
+    assert Fixed(value=1).is_point_mass
+    assert Triangular(low=2, mode=2, high=2).is_point_mass
+    assert not Triangular(low=1, mode=2, high=3).is_point_mass
+    assert not Beta(mean=0.3, kappa=5).is_point_mass

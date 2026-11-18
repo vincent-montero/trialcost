@@ -144,8 +144,10 @@ def compute_quantities(
     n_sims = recruitment.n_sims
     pop, ops = design.population, design.operations
 
+    streams = iter(rng.spawn(5))  # one child stream per random input (D29)
+
     def d(dist):
-        return draw(dist, rng, n_sims, deterministic)
+        return draw(dist, next(streams), n_sims, deterministic)
 
     sf = d(pop.screen_failure_rate)
     p_drop = d(pop.annual_dropout_rate)

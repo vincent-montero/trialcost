@@ -18,9 +18,10 @@ Random draws and their sharing
   by every procedure and item in that country.
 - A procedure / item / override price: one draw per simulation, shared by all
   countries (the uncertainty is about the price level, not per country).
-- Every catalogue row is drawn on every run, in file order, whether or not it
-  applies. Changing a design option therefore does not shift the random
-  numbers of the other prices (common random numbers between scenarios).
+- Every catalogue row is drawn on every run, whether or not it applies, each
+  from its own child generator (``rng.spawn``). Changing a design option or
+  pinning one price therefore does not shift any other random number
+  (common random numbers between scenarios, D29).
 
 Output: ``CostLines``, i.e. a metadata table with one row per cost line
 (item, country, category, resource, driver, source) plus a
@@ -94,21 +95,43 @@ def draw_country_factors(
     n_sims: int,
     deterministic: bool = False,
 ) -> CountryFactors:
-    def column(name: str) -> np.ndarray:
-        return np.column_stack(
-            [draw(catalogue.country_range(c, name), rng, n_sims, deterministic) for c in countries]
-        )
+    s_index, s_overhead = rng.spawn(2)
+    return CountryFactors(
+        index=_draw_country_range(
+            catalogue, countries, "site_price", s_index, n_sims, deterministic
+        ),
+        overhead=_draw_country_range(
+            catalogue, countries, "site_overhead", s_overhead, n_sims, deterministic
+        ),
+    )
 
-    return CountryFactors(index=column("site_price"), overhead=column("site_overhead"))
+
+def _draw_country_range(
+    catalogue: Catalogue,
+    countries: tuple[str, ...],
+    name: str,
+    rng: np.random.Generator,
+    n_sims: int,
+    deterministic: bool,
+) -> np.ndarray:
+    """One draw per simulation and country, shape ``(n_sims, n_c)``."""
+    streams = rng.spawn(len(countries))
+    return np.column_stack(
+        [
+            draw(catalogue.country_range(c, name), s, n_sims, deterministic)
+            for c, s in zip(countries, streams, strict=True)
+        ]
+    )
 
 
 def _draw_rows(
     table: pd.DataFrame, rng: np.random.Generator, n_sims: int, deterministic: bool
 ) -> dict:
     """One price draw per row of a catalogue table (index -> (n_sims,) array)."""
+    streams = rng.spawn(len(table))
     return {
-        key: draw(Triangular(low=r.low, mode=r.mode, high=r.high), rng, n_sims, deterministic)
-        for key, r in zip(table.index, table.itertuples(index=False), strict=True)
+        key: draw(Triangular(low=r.low, mode=r.mode, high=r.high), s, n_sims, deterministic)
+        for key, r, s in zip(table.index, table.itertuples(index=False), streams, strict=True)
     }
 
 
@@ -123,18 +146,14 @@ def compute_costs(
     n_sims, countries = q.n_sims, q.countries
 
     # --- draws (fixed order, every row, see module docstring) ---
-    factors = draw_country_factors(catalogue, countries, rng, n_sims, deterministic)
+    s_factors, s_proc, s_item, s_override, s_sponsor, s_cta = rng.spawn(6)
+    factors = draw_country_factors(catalogue, countries, s_factors, n_sims, deterministic)
     site_scale = factors.index * (1 + factors.overhead)  # (n_sims, n_c)
-    proc_price = _draw_rows(catalogue.procedures, rng, n_sims, deterministic)
-    item_price = _draw_rows(catalogue.study_items, rng, n_sims, deterministic)
-    override_price = _draw_rows(catalogue.overrides, rng, n_sims, deterministic)
-    sponsor_factor_draws = _draw_rows(catalogue.sponsor_factors, rng, n_sims, deterministic)
-    cta_fee = np.column_stack(
-        [
-            draw(catalogue.country_range(c, "cta_fee_eur"), rng, n_sims, deterministic)
-            for c in countries
-        ]
-    )
+    proc_price = _draw_rows(catalogue.procedures, s_proc, n_sims, deterministic)
+    item_price = _draw_rows(catalogue.study_items, s_item, n_sims, deterministic)
+    override_price = _draw_rows(catalogue.overrides, s_override, n_sims, deterministic)
+    sponsor_factor_draws = _draw_rows(catalogue.sponsor_factors, s_sponsor, n_sims, deterministic)
+    cta_fee = _draw_country_range(catalogue, countries, "cta_fee_eur", s_cta, n_sims, deterministic)
 
     meta: list[dict] = []
     values: list[np.ndarray] = []

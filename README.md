@@ -3,7 +3,7 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, catalogue loader, recruitment, quantities and costing in place (engine step 5/6); no CLI / report yet. **No engine yet.**
+> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, **engine v0 complete** (design → recruitment → quantities → costs → report, CLI); no UI yet. **No engine yet.**
 > Personal project, built exclusively from public sources.
 
 ---
@@ -90,6 +90,9 @@ Constant hazard derived from the annual dropout rate. Expected visits completed 
 - Every numeric parameter can be a distribution: `fixed`, `triangular`, `lognormal` (median, geometric SD), `beta` (mean, concentration κ) for proportions.
 - Monte Carlo: each run simulates one possible trial → joint outcome (duration, cost).
 - Outputs: P10 / P50 / P90, breakdowns, tornado chart (which assumptions matter most), P(cost ≤ budget), P(recruitment complete by T).
+- **Dropout-cost report** (`report.dropout_report`): the design is simulated twice with the same seed, as given and with dropout = 0. Reported: completers = N·exp(−h·patient duration), cost per completer, cost per completer without dropout, total-cost change and the completer cost premium.
+- **Tornado** (`report.tornado`, one-way sensitivity on the **mean** total cost, same seed for every run): each input goes to its P10 then P90 while all other inputs keep their uncertainty; fixed inputs go to 0.5× / 1.5×; groups (all countries' site index / overhead / activation, all CRO-labour prices) move together, members without spread unchanged. Inputs: recruitment rate, between-site spread, activation delays, screen failure, dropout, monitoring interval, site price index, site overhead, CRO labour prices, close-out duration.
+- **Random streams**: every random input draws from its own child generator (`Generator.spawn`), so scenarios that pin or change one input share all other random numbers exactly (D32). That makes the dropout delta and tornado bars free of Monte Carlo noise from unrelated inputs.
 - Distribution width reflects evidence grade (§4).
 
 ### 2.7 Prices
@@ -296,6 +299,9 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D29 | **Common random numbers**: every catalogue row drawn on every run in file order; country factors shared within a country, prices shared across countries | Toggling an option changes only the lines it affects (tested), needed for the Δ-vs-no-dropout report and for a clean tornado |
 | D30 | **Labels reworded** to match their drivers (`edc_hosting`: whole duration; `pharmacy_annual`: every active site-year) rather than adding offsets; `resource` corrected for software / fee items (`edc_build_licence`, `edc_hosting` → `it_vendor`; `irb_local` → `authority_fee`) | Vincent's choice; small overlaps documented in §6 #16. Resource fix keeps the resource breakdown honest and keeps software / fees out of the sponsor-model labour factors |
 | D31 | **Operational options now drive cost** (§2.9): monitoring strategy selects risk-based items (central monitoring, set-up, extra queries) or longer full-SDV visits, frequency stays `monitoring_interval_months`; sponsor model multiplies CRO-delivered labour via `sponsor_model_factors.csv`; interim analyses add analysis + DMC review items. New drivers `per_conduct_month`, `per_interim_analysis`; `applies_if` gains `operations.<field>==<value>` | Vincent asked for the options to be costed from public evidence. Frequency kept separate from strategy so the two effects are not counted twice. In-house counts sponsor staff (otherwise the work would vanish); full CRO / FSP exclude sponsor oversight (§1) |
+| D32 | **One child random stream per random input** (`Generator.spawn` per stage, per country, per catalogue row), refining D29 | Pinning or removing one input (`Fixed`, point mass) consumes no random numbers; with a single shared stream that shifted every later draw. Now verified: pinning one procedure price changes only that procedure's lines |
+| D33 | **Tornado on the mean total cost**, P10/P90 of uncertain inputs, 0.5×/1.5× of fixed ones, groups moved together (§2.6) | Mean is stable with common random numbers and 2,000 sims per bar; group swings answer "what if all our CRO rates are high", which is how the uncertainty is correlated in practice |
+| D34 | No SciPy: the Beta quantile (tornado only) is computed in pure Python (incomplete beta continued fraction + bisection), tested against 1M samples | Adding the dependency was blocked in this session; the function is short and isolated, SciPy can replace it later |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -355,7 +361,7 @@ Published component shares for context (phase 3, US): administrative staff 20 %,
 
 ## 8. Roadmap
 
-1. Engine v0: vectorised NumPy Monte Carlo, YAML design loader, breakdowns, tornado, dropout-cost report, deterministic "all-at-mode" mode for testing.
+1. ~~Engine v0: vectorised NumPy Monte Carlo, YAML design loader, breakdowns, tornado, dropout-cost report, deterministic "all-at-mode" mode for testing.~~ Done 2026-11-18.
 2. Recruitment priors from ClinicalTrials.gov (enrolment ÷ (sites × recruitment duration) by indication/phase).
 3. Fix known gaps: Italy, BfArM fee; check site management vs monitoring overlap against real CRO quotes (D26).
 4. One-hour review of defaults by an operational professional (CRA or clinical project manager): CRO rates, monitoring frequency, investigator fees.
@@ -443,6 +449,13 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Engine step 6: CLI and reports (engine v0 complete)
+- Done: `src/trialcost/simulate.py` (`run()` → `SimulationResult`, CLI with `--n-sims`, `--seed`, `--deterministic`, `--budget`, `--recruit-by`, `--tornado-sims`, `--no-tornado`, `--out`, `--lines`, `--data-dir`); `src/trialcost/report.py` (summary, probabilities, breakdowns with shares, dropout-cost report, tornado, text report, CSV outputs); `quantile()` / `is_point_mass` on every distribution; one child random stream per random input in recruitment, quantities and costing; ruff ignores PD011 (false positives on `CostLines.values`); `tests/test_simulate_report.py` + quantile tests (168 pass). P50 regression band moved deliberately from 4.6–5.0 to 4.7–5.1 M€ after D31.
+- Decisions: D32 (child random streams), D33 (tornado definition), D34 (pure-Python Beta quantile).
+- Assumptions: none new.
+- Results (10k sims, seed 42, archetype): total P10/P50/P90 **€4.27M / 4.89M / 5.96M**; duration 31.6 / 38.5 / 51.8 months; LPI 12.7 / 19.6 / 32.9 months; P50 per randomised patient €98k; P(cost ≤ €5M) 57 %; P(LPI ≤ 24 months) 70 %. Largest shares: monitoring 25.8 %, management 14.7 %, site start-up 11.3 %; CRA labour alone 35.8 %. Dropout: 42.6 completers of 50 (P50), cost per completer €117k vs €99k without dropout (+16.6 %), total cost −€31k (−0.6 %). Tornado (mean €5.04M): CRO labour prices €1.89M swing, recruitment rate €1.36M, monitoring interval (1 vs 3 months) €0.81M, everything else < €0.16M. CLI run incl. dropout comparison and tornado: 0.7 s.
+- Next: recruitment priors from ClinicalTrials.gov (roadmap #2), operational review of CRO rates (#4, now confirmed as the top driver), Streamlit UI (#6). Open question: strategy-specific default for `monitoring_interval_months`.
 
 ### 2026-11-18 — Label rewording (D30) and costed operational options (D31)
 - Done: `study_items.csv`: `edc_hosting` and `pharmacy_annual` labels reworded, `resource` fixed for EDC (→ `it_vendor`) and `irb_local` (→ `authority_fee`); 6 new items (`monitoring_visit_full_sdv`, `central_monitoring`, `rbm_setup`, `rbm_extra_queries`, `interim_analysis`, `interim_dmc_review`), `monitoring_visit` now conditional on risk-based monitoring; new `data/sponsor_model_factors.csv`. Code: `applies_if` supports `operations.<field>==<value>`; drivers `per_conduct_month`, `per_interim_analysis`; sponsor-model factor in `costing.py`; study-level lines with zero quantity dropped. 14 new tests (146 pass). Literature search: Cochrane review of monitoring strategies (ADAMON, OPTIMON, MONITORING), FSP / insourcing claims, burdened labour cost; nothing public on interim-analysis prices.
