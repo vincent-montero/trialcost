@@ -32,6 +32,7 @@ data/                    # source of truth for all numbers
   study_items.csv
   countries.csv
   benchmarks.csv         # validation only, never used in estimates
+  constants.csv          # engine-level numbers: FX, close-out months, raters/site, DMC interval
 designs/
   rare-neuro-ph2-mri-scales.yaml
 src/trialcost/
@@ -53,7 +54,8 @@ CLAUDE.md
 
 - `procedures.csv`: per-occurrence site cost, France reference. `country_scaling` = `site_price` (× country site price index × (1 + overhead)) or `none` (vendor price, not scaled).
 - `study_items.csv`: `driver` ∈ `per_study | per_country | per_site | per_site_month | per_site_year | per_month | per_patient | per_patient_visit | per_scan | per_monitoring_visit | per_meeting | per_rater`. `applies_if` is a small condition language: `always`, `country==XX`, `operations.<flag>`, `uses:<procedure_id>`, combined with `and`. Implement it as a tiny explicit parser, not `eval`.
-- `countries.csv`: site price index and overhead (triangular), labour cost (informative only), CTA fee range, activation months range.
+- `countries.csv`: site price index and overhead (triangular), labour cost (informative only), CTA fee range, activation months range (default when a design omits `activation_months`, D21).
+- `constants.csv`: engine-level parameters with the same `low/mode/high` + grade columns; read them via `Catalogue.constant()`, never hard-code.
 - Automatic per-visit procedures on every **on-site** visit: `coordinator_visit`, `logistics_visit`, `vital_signs`, `patient_travel` (if `operations.patient_travel_support`). Remote visits get none of them.
 - Country-specific procedure overrides (e.g. US MRI €900–1,300) currently live in the prototype code: move them to data (e.g. `procedure_overrides.csv`) — ask before choosing the format.
 

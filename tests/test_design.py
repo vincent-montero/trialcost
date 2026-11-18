@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from trialcost.design import DAYS_PER_MONTH, Design, Visit, load_design, visits_every
-from trialcost.distributions import Beta, Fixed, LogNormal, Triangular
+from trialcost.distributions import Beta, Fixed, LogNormal
 
 ARCHETYPE = Path(__file__).resolve().parents[1] / "designs" / "rare-neuro-ph2-mri-scales.yaml"
 
@@ -49,13 +49,18 @@ def test_archetype_distributions_parsed(archetype):
     pop = archetype.population
     assert isinstance(pop.screen_failure_rate, Beta)
     assert isinstance(pop.rate_mean, LogNormal)
-    assert isinstance(archetype.countries[0].activation_months, Triangular)
+    assert all(c.activation_months is None for c in archetype.countries)  # D21: from catalogue
     assert archetype.operations.monitoring_interval_months == Fixed(value=2.0)
 
 
 def test_patient_duration_derived_from_last_visit(archetype):
     assert archetype.patient_duration_days == 392
     assert archetype.patient_duration_months == pytest.approx(392 / DAYS_PER_MONTH)
+
+
+def test_activation_months_optional():
+    d = Design.model_validate(_minimal(countries=[{"country": "FR", "n_sites": 2}]))
+    assert d.countries[0].activation_months is None
 
 
 def test_plain_numbers_coerced_and_defaults_validated():

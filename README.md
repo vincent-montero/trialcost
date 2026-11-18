@@ -3,7 +3,7 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions and design schema in place (engine step 2/6). **No engine yet.**
+> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema and catalogue loader in place (engine step 3/6). **No engine yet.**
 > Personal project, built exclusively from public sources.
 
 ---
@@ -152,7 +152,7 @@ class Visit(BaseModel):
 class CountryAllocation(BaseModel):
     country: str = Field(pattern=r"^[A-Z]{2}$")
     n_sites: int = Field(ge=1)
-    activation_months: Dist
+    activation_months: Dist | None = None   # None -> data/countries.csv (D21, provisional)
 
 class Population(BaseModel):
     screen_failure_rate: Dist
@@ -199,6 +199,7 @@ Files in `data/` (EUR, price year 2026):
 | `study_items.csv` | 39 study-, country-, site-, time- and patient-driven items |
 | `countries.csv` | 6 countries: site price index, overhead, labour cost, CTA fees, activation delays |
 | `benchmarks.csv` | 9 published benchmarks, used for validation only |
+| `constants.csv` | 4 engine-level parameters (FX rate, close-out months, raters per site, DMC meeting interval), same `low/mode/high` + grade columns |
 
 ### Evidence grades
 
@@ -237,6 +238,10 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D18 | First archetype = **rare neuro phase 2, MRI + scales** | Close to Vincent's domain, exercises most modules |
 | D19 | Deterministic mode uses each distribution's **stated parameter**: Fixed → value, Triangular → mode, LogNormal → median, Beta → mean | Golden-test totals stay hand-checkable from the YAML; a Beta mode would depend on κ |
 | D20 | Design validation adds consistency checks **without changing the schema**: unique arm / visit / country IDs, `screening` ⇔ `day < 0`, ≥ 1 arm, country and post-randomisation visit | Catch typos early; procedure IDs are checked against the catalogue (`catalogue.py`) |
+| D21 | **Provisional — revisit.** `CountryAllocation.activation_months` is **optional**: when omitted, the country's range in `countries.csv` is used; a value in the design overrides it | Avoids duplicating catalogue values in every design. To revisit once recruitment priors exist (activation may become indication- or site-type-specific, and the design may need to carry it explicitly) |
+| D22 | Engine-level numbers (FX, close-out, raters per site, DMC interval) live in `data/constants.csv` with the usual grade columns | "No numbers in code" applies to these too |
+
+**Provisional decisions to revisit:** D21 (optional `activation_months`).
 
 ---
 
@@ -253,7 +258,7 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 7. **Activation delays**: 3–12 months by country (Tufts: ~6 months existing sites, ~8.4 months new sites).
 8. **Close-out**: 6 months from LPLV to CSR.
 9. **Investigator fee / contreparties**: €500–3,000 per patient (country-scaled).
-10. **Raters**: 2 per site; **DMC**: one meeting per 6 months of conduct.
+10. **Raters**: 2 per site; **DMC**: one meeting per 6 months of conduct (`constants.csv`). The `dmc_meeting` note in `study_items.csv` says "of treatment period": the exposure window is to be fixed when costing is implemented.
 11. **US MRI override**: €900–1,300 per scan.
 12. **German BfArM fee** not found: CTA range = ethics fees + assumed €3–10k.
 13. **Italy**: labour cost, fees and site index not verified.
@@ -369,6 +374,13 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Engine step 3: catalogue loader and validation
+- Done: `src/trialcost/catalogue.py` (load the 5 CSVs; validate columns, unique IDs, `low <= mode <= high`, non-negative, grades incl. mixed `A/D`, non-empty sources, drivers, scalings, FR reference = index 1 / overhead 0, required constants; all problems reported together in `CatalogueError`; `applies_if` parser with explicit atom classes, no `eval`; `Catalogue` accessors returning `Triangular`; `applicable_items(design, country)`; `check_design()`); new `data/constants.csv`; `activation_months` made optional in `design.py`, removed from the archetype YAML; `tests/test_catalogue.py`. 86 tests pass.
+- Decisions: D21 (optional `activation_months`, **provisional**, listed under "to revisit" in §5), D22 (`constants.csv`).
+- Assumptions: no new values. Existing assumptions §6 #8 and #10 moved from prototype code into `constants.csv`; §6 #10 notes the DMC exposure-window mismatch.
+- Results: no cost output yet. Archetype resolves to 36 study-level items, plus 2 France-only (`site_fixed_fees_fr`, `imaging_site_setup_fr`) and 1 US-only (`irb_local`).
+- Next: step 4, `recruitment.py`. Open before step 5: (a) `study_items.csv` has no `country_scaling` column, but notes say `pharmacy_annual`, `site_monitoring_fee` and `investigator_fee` are country-scaled (the prototype scaled `investigator_fee` in code); (b) override file format; (c) site_management vs monitoring_visit double counting.
 
 ### 2026-11-18 — Engine step 2: distributions, design schema, archetype YAML
 - Done: `src/trialcost/distributions.py` (Fixed / Triangular / LogNormal / Beta with vectorised `sample(rng, size)`, `central()`, `expectation()`, and `draw(..., deterministic=)` as the single sampling entry point); `src/trialcost/design.py` (§3 schema field for field, consistency checks, `n_sites`, `patient_duration_months`, `visits_every()`, `load_design()`); `designs/rare-neuro-ph2-mri-scales.yaml` (same design as the prototype); `tests/test_distributions.py`, `tests/test_design.py` (41 tests incl. one doctest). Pytest now also collects doctests from `src/`.

@@ -147,6 +147,10 @@ def _coerce(v):
     return {"kind": "fixed", "value": v} if isinstance(v, (int, float)) else v
 
 
+#: Any concrete distribution (for type hints on engine functions).
+AnyDist = Fixed | Triangular | LogNormal | Beta
+
+#: Pydantic field type: discriminated on ``kind``; a plain number becomes ``Fixed``.
 Dist = Annotated[
     Fixed | Triangular | LogNormal | Beta,
     Field(discriminator="kind"),
@@ -155,7 +159,7 @@ Dist = Annotated[
 
 
 def draw(
-    dist: Fixed | Triangular | LogNormal | Beta,
+    dist: AnyDist,
     rng: np.random.Generator,
     size: Size,
     deterministic: bool = False,

@@ -57,7 +57,8 @@ class Visit(BaseModel):
 class CountryAllocation(BaseModel):
     country: str = Field(pattern=r"^[A-Z]{2}$")
     n_sites: int = Field(ge=1)
-    activation_months: Dist
+    # Optional (D21): None = use the country's range in data/countries.csv.
+    activation_months: Dist | None = None
 
 
 class Population(BaseModel):

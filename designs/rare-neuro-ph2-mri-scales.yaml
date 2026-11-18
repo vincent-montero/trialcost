@@ -4,7 +4,7 @@
 # PLACEHOLDERS (grade D, README §6): population and recruitment values below are
 # to be replaced by ClinicalTrials.gov-derived priors. Beta concentration kappa = 20
 # (SD ~0.10 on SF, ~0.08 on dropout) is the prototype's choice, not sourced.
-# Activation ranges mirror data/countries.csv (activation_months_low/mode/high).
+# activation_months is omitted: each country uses its range in data/countries.csv (D21).
 
 name: rare-neuro-ph2-mri-scales
 n_randomised: 50
@@ -49,11 +49,11 @@ visits:
     procedures: [ae_review]
 
 countries:
-  - {country: FR, n_sites: 4, activation_months: {kind: triangular, low: 3, mode: 5, high: 9}}
-  - {country: DE, n_sites: 3, activation_months: {kind: triangular, low: 3, mode: 6, high: 9}}
-  - {country: ES, n_sites: 3, activation_months: {kind: triangular, low: 3, mode: 5, high: 8}}
-  - {country: IT, n_sites: 2, activation_months: {kind: triangular, low: 5, mode: 8, high: 12}}
-  - {country: US, n_sites: 3, activation_months: {kind: triangular, low: 3, mode: 5, high: 8}}
+  - {country: FR, n_sites: 4}
+  - {country: DE, n_sites: 3}
+  - {country: ES, n_sites: 3}
+  - {country: IT, n_sites: 2}
+  - {country: US, n_sites: 3}
 
 population:
   screen_failure_rate: {kind: beta, mean: 0.35, kappa: 20}
