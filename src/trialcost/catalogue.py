@@ -78,7 +78,7 @@ PROCEDURE_COLUMNS = [
 ]  # fmt: skip
 STUDY_ITEM_COLUMNS = [
     "item_id", "label", "category", "resource", "driver", "low", "mode", "high",
-    "applies_if", "evidence", "source", "notes",
+    "country_scaling", "applies_if", "evidence", "source", "notes",
 ]  # fmt: skip
 COUNTRY_COLUMNS = [
     "country",
@@ -374,6 +374,9 @@ def _validate(
     if not s:
         s += _check_range(study_items, "item_id", "study_items")
         s += _check_allowed(study_items, "item_id", "driver", DRIVERS, "study_items")
+        s += _check_allowed(
+            study_items, "item_id", "country_scaling", COUNTRY_SCALINGS, "study_items"
+        )
         for _, row in study_items.iterrows():
             item = row["item_id"]
             try:

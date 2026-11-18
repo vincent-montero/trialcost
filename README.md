@@ -240,6 +240,7 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D20 | Design validation adds consistency checks **without changing the schema**: unique arm / visit / country IDs, `screening` ⇔ `day < 0`, ≥ 1 arm, country and post-randomisation visit | Catch typos early; procedure IDs are checked against the catalogue (`catalogue.py`) |
 | D21 | **Provisional — revisit.** `CountryAllocation.activation_months` is **optional**: when omitted, the country's range in `countries.csv` is used; a value in the design overrides it | Avoids duplicating catalogue values in every design. To revisit once recruitment priors exist (activation may become indication- or site-type-specific, and the design may need to carry it explicitly) |
 | D22 | Engine-level numbers (FX, close-out, raters per site, DMC interval) live in `data/constants.csv` with the usual grade columns | "No numbers in code" applies to these too |
+| D23 | `study_items.csv` gets a **`country_scaling`** column (`site_price` / `none`), like `procedures.csv`. `site_price` for site-paid items: `pharmacy_annual`, `site_monitoring_fee`, `investigator_fee` (notes said "country-scaled") and the FR-only `site_fixed_fees_fr`, `imaging_site_setup_fr` (no numeric effect: FR index 1, overhead 0). All CRO / vendor items `none` | Previously implicit in notes and prototype code; agreed with Vincent |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 

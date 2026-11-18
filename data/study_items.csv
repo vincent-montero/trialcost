@@ -1,40 +1,40 @@
-item_id,label,category,resource,driver,low,mode,high,applies_if,evidence,source,notes
-protocol_writing,"Protocol, IB update, synopsis (medical writing)",startup,medical_writer,per_study,30000,50000,90000,always,D,Assumption,
-cta_preparation,CTA dossier preparation and CTIS/IND submission,regulatory,regulatory,per_study,20000,35000,60000,always,D,Assumption,Country fees are in countries.csv
-country_regulatory,"Country-specific submission work (Part II, translations)",regulatory,regulatory,per_country,5000,12000,25000,always,D,Assumption,Includes translation of patient-facing documents
-insurance,Sponsor liability insurance,regulatory,insurance,per_country,1000,5000,15000,always,C,"Lille ILIS thesis 2021 (academic FR studies: 1,000-1,300 EUR)",Academic examples are the floor; industry premiums scale with N and risk (assumption)
-site_feasibility,"Site identification, feasibility, selection visit",site_startup,cra,per_site,3000,6000,10000,always,B,ClinicalTrialZone tables via IntuitionLabs 'Clinical Trial Start-Up Costs' (rev. Apr 2026),Contracting & feasibility ~$3-10k+ per site
-site_activation,"Site activation (contract, budget, regulatory docs, SIV)",site_startup,cra,per_site,17391,21739,52174,always,B,Tufts CSDD via IntuitionLabs 'Clinical Trial Start-Up Costs' (rev. Apr 2026),Tufts ~$25k/site; $20k (Gen Li 2008); academic sites $75-200k (ClinicalTrialZone) not used as high
-site_fixed_fees_fr,"French site fixed fees (admin, set-up, pharmacy year 1, training)",site_startup,infrastructure,per_site,1200,2400,3600,country==FR,A,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024","Admin 224.72-561.80 + set-up 337-674 + pharmacy 600-1,800 + TEC/IDE training"
-pharmacy_annual,Site pharmacy fee per additional year,site_conduct,pharmacist,per_site_year,250,500,750,always,A,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024",Country-scaled
-irb_local,Local IRB / ethics site fee,site_startup,regulatory,per_site,870,2174,4348,country==US,B,ClinicalTrialZone tables via IntuitionLabs 'Clinical Trial Start-Up Costs' (rev. Apr 2026),
-site_management,"CRO site management per active site-month (remote, CTA, TMF)",monitoring,cra,per_site_month,870,1304,2174,always,B,"Tufts CSDD via IntuitionLabs 'Clinical Trial Start-Up Costs' (rev. Apr 2026); PharmExec ~$2,000/month",Overlaps partly with monitoring visits: reviewer to confirm
-monitoring_visit,On-site monitoring visit (CRA ~12 h incl. prep/report + travel),monitoring,cra,per_monitoring_visit,1500,2200,3500,always,C,Derived: CRA salary ~$85.5k/y (ZipRecruiter Nov 2026) x CRO bill multiplier 2.5-3.5 (assumption) + travel 300-900 EUR,Frequency set by Operations.monitoring_interval_months
-site_monitoring_fee,Site fee for hosting a monitoring visit (TEC time),monitoring,coordinator,per_monitoring_visit,186,230,288,always,A,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024",Country-scaled
-closeout_visit,Site close-out (CRA visit + site close-out fee),closeout,cra,per_site,1700,2400,3800,always,C,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024 (close-out 173-289) + monitoring_visit",
-project_management,CRO project management (PM + CTM),management,project_manager,per_month,6000,12000,24000,always,C,Derived: US clinical PM ~$117k/y (Salary.com Jul 2026) x bill multiplier 2.5-3.5 (assumption) x 40-120 h/month,
-medical_monitoring,Medical monitor,management,physician,per_month,2000,4000,7000,always,D,Assumption,
-pharmacovigilance,"Safety database, SAE processing, DSUR",safety,pharmacovigilance,per_month,1500,3000,5000,always,D,Assumption,SAE-driven cost can be added in v1
-edc_build_licence,EDC licence + database build (year 1),data,data_manager,per_study,43478,78261,130435,always,B,ClinCapture via IntuitionLabs 'EDC software pricing 2026',"Mid-size phase II, 5-50 sites"
-edc_hosting,EDC hosting after year 1,data,data_manager,per_month,800,1500,3000,always,D,Assumption,
-data_management,"Data management: cleaning, queries, coding, lock",data,data_manager,per_patient,600,1200,2500,always,D,Assumption,Plus fixed lock activities below
-db_lock,"Database lock, SDTM/ADaM transfer",data,data_manager,per_study,15000,30000,60000,always,D,Assumption,
-biostatistics,"SAP, randomisation list, TLFs, analysis",analysis,biostatistician,per_study,40000,80000,150000,always,D,Assumption,Academic examples 5-15k EUR (Lille thesis) are not comparable
-csr_writing,Clinical study report,analysis,medical_writer,per_study,25000,45000,70000,always,D,Assumption,
-irt_setup,IRT/RTSM set-up,supply,it_vendor,per_study,20000,35000,60000,operations.irt,D,Assumption,
-irt_monthly,IRT/RTSM hosting & support,supply,it_vendor,per_month,1500,2500,4000,operations.irt,D,Assumption,
-drug_supply,"IMP packaging, labelling, blinding, depots, distribution",supply,supply_chain,per_study,50000,100000,200000,always,D,Assumption,IMP manufacturing excluded in v0
-central_lab_setup,"Central lab set-up, manual, kit design",lab,central_lab,per_study,15000,25000,40000,operations.central_lab,D,Assumption,
-imaging_charter,"Imaging core lab: charter, manuals, portal, reader training",imaging,imaging_core,per_study,21739,34783,52174,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
-imaging_site_qualif,Imaging site qualification (phantom/dummy scan),imaging,imaging_core,per_site,870,1739,2609,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
-imaging_qc,Image ingestion & QC,imaging,imaging_core,per_scan,130,217,304,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
-imaging_read,Blinded central read (incl. adjudication share),imaging,imaging_core,per_scan,261,522,1043,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
-imaging_lock,Imaging data management & lock,imaging,imaging_core,per_study,17391,30435,43478,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
-imaging_site_setup_fr,French site imaging set-up (4 h TEC + 1 h medical),imaging,imaging,per_site,346,346,692,operations.central_imaging_reading and country==FR,A,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024",
-rater_certification,Rater training & certification for clinician scales,assessment,rater_vendor,per_rater,1000,2000,3500,uses:scale_clinician,D,Assumption,Default 2 raters per site
-epro_setup,ePRO set-up and licence,assessment,it_vendor,per_study,20000,35000,60000,uses:scale_pro,D,Assumption,
-dmc_setup,DMC charter and set-up,safety,dmc,per_study,10000,18000,30000,operations.dmc,D,Assumption,
-dmc_meeting,DMC meeting (members + independent statistician),safety,dmc,per_meeting,15000,25000,40000,operations.dmc,D,Assumption,Default: 1 per 6 months of treatment period
-investigator_meeting,Investigator meeting,startup,events,per_study,30000,60000,120000,always,D,Assumption,Can be virtual for small trials
-investigator_fee,Per-patient investigator fee / contreparties,site_conduct,physician,per_patient,500,1500,3000,always,D,Assumption,FR convention unique allows contreparties on top of surcoûts; country-scaled
-tmf_archiving,eTMF and 25-year archiving,closeout,infrastructure,per_study,10000,20000,40000,always,D,Assumption,
+item_id,label,category,resource,driver,low,mode,high,country_scaling,applies_if,evidence,source,notes
+protocol_writing,"Protocol, IB update, synopsis (medical writing)",startup,medical_writer,per_study,30000,50000,90000,none,always,D,Assumption,
+cta_preparation,CTA dossier preparation and CTIS/IND submission,regulatory,regulatory,per_study,20000,35000,60000,none,always,D,Assumption,Country fees are in countries.csv
+country_regulatory,"Country-specific submission work (Part II, translations)",regulatory,regulatory,per_country,5000,12000,25000,none,always,D,Assumption,Includes translation of patient-facing documents
+insurance,Sponsor liability insurance,regulatory,insurance,per_country,1000,5000,15000,none,always,C,"Lille ILIS thesis 2021 (academic FR studies: 1,000-1,300 EUR)",Academic examples are the floor; industry premiums scale with N and risk (assumption)
+site_feasibility,"Site identification, feasibility, selection visit",site_startup,cra,per_site,3000,6000,10000,none,always,B,ClinicalTrialZone tables via IntuitionLabs 'Clinical Trial Start-Up Costs' (rev. Apr 2026),Contracting & feasibility ~$3-10k+ per site
+site_activation,"Site activation (contract, budget, regulatory docs, SIV)",site_startup,cra,per_site,17391,21739,52174,none,always,B,Tufts CSDD via IntuitionLabs 'Clinical Trial Start-Up Costs' (rev. Apr 2026),Tufts ~$25k/site; $20k (Gen Li 2008); academic sites $75-200k (ClinicalTrialZone) not used as high
+site_fixed_fees_fr,"French site fixed fees (admin, set-up, pharmacy year 1, training)",site_startup,infrastructure,per_site,1200,2400,3600,site_price,country==FR,A,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024","Admin 224.72-561.80 + set-up 337-674 + pharmacy 600-1,800 + TEC/IDE training"
+pharmacy_annual,Site pharmacy fee per additional year,site_conduct,pharmacist,per_site_year,250,500,750,site_price,always,A,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024",Country-scaled
+irb_local,Local IRB / ethics site fee,site_startup,regulatory,per_site,870,2174,4348,none,country==US,B,ClinicalTrialZone tables via IntuitionLabs 'Clinical Trial Start-Up Costs' (rev. Apr 2026),
+site_management,"CRO site management per active site-month (remote, CTA, TMF)",monitoring,cra,per_site_month,870,1304,2174,none,always,B,"Tufts CSDD via IntuitionLabs 'Clinical Trial Start-Up Costs' (rev. Apr 2026); PharmExec ~$2,000/month",Overlaps partly with monitoring visits: reviewer to confirm
+monitoring_visit,On-site monitoring visit (CRA ~12 h incl. prep/report + travel),monitoring,cra,per_monitoring_visit,1500,2200,3500,none,always,C,Derived: CRA salary ~$85.5k/y (ZipRecruiter Nov 2026) x CRO bill multiplier 2.5-3.5 (assumption) + travel 300-900 EUR,Frequency set by Operations.monitoring_interval_months
+site_monitoring_fee,Site fee for hosting a monitoring visit (TEC time),monitoring,coordinator,per_monitoring_visit,186,230,288,site_price,always,A,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024",Country-scaled
+closeout_visit,Site close-out (CRA visit + site close-out fee),closeout,cra,per_site,1700,2400,3800,none,always,C,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024 (close-out 173-289) + monitoring_visit",
+project_management,CRO project management (PM + CTM),management,project_manager,per_month,6000,12000,24000,none,always,C,Derived: US clinical PM ~$117k/y (Salary.com Jul 2026) x bill multiplier 2.5-3.5 (assumption) x 40-120 h/month,
+medical_monitoring,Medical monitor,management,physician,per_month,2000,4000,7000,none,always,D,Assumption,
+pharmacovigilance,"Safety database, SAE processing, DSUR",safety,pharmacovigilance,per_month,1500,3000,5000,none,always,D,Assumption,SAE-driven cost can be added in v1
+edc_build_licence,EDC licence + database build (year 1),data,data_manager,per_study,43478,78261,130435,none,always,B,ClinCapture via IntuitionLabs 'EDC software pricing 2026',"Mid-size phase II, 5-50 sites"
+edc_hosting,EDC hosting after year 1,data,data_manager,per_month,800,1500,3000,none,always,D,Assumption,
+data_management,"Data management: cleaning, queries, coding, lock",data,data_manager,per_patient,600,1200,2500,none,always,D,Assumption,Plus fixed lock activities below
+db_lock,"Database lock, SDTM/ADaM transfer",data,data_manager,per_study,15000,30000,60000,none,always,D,Assumption,
+biostatistics,"SAP, randomisation list, TLFs, analysis",analysis,biostatistician,per_study,40000,80000,150000,none,always,D,Assumption,Academic examples 5-15k EUR (Lille thesis) are not comparable
+csr_writing,Clinical study report,analysis,medical_writer,per_study,25000,45000,70000,none,always,D,Assumption,
+irt_setup,IRT/RTSM set-up,supply,it_vendor,per_study,20000,35000,60000,none,operations.irt,D,Assumption,
+irt_monthly,IRT/RTSM hosting & support,supply,it_vendor,per_month,1500,2500,4000,none,operations.irt,D,Assumption,
+drug_supply,"IMP packaging, labelling, blinding, depots, distribution",supply,supply_chain,per_study,50000,100000,200000,none,always,D,Assumption,IMP manufacturing excluded in v0
+central_lab_setup,"Central lab set-up, manual, kit design",lab,central_lab,per_study,15000,25000,40000,none,operations.central_lab,D,Assumption,
+imaging_charter,"Imaging core lab: charter, manuals, portal, reader training",imaging,imaging_core,per_study,21739,34783,52174,none,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
+imaging_site_qualif,Imaging site qualification (phantom/dummy scan),imaging,imaging_core,per_site,870,1739,2609,none,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
+imaging_qc,Image ingestion & QC,imaging,imaging_core,per_scan,130,217,304,none,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
+imaging_read,Blinded central read (incl. adjudication share),imaging,imaging_core,per_scan,261,522,1043,none,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
+imaging_lock,Imaging data management & lock,imaging,imaging_core,per_study,17391,30435,43478,none,operations.central_imaging_reading,B,"MedDeviceGuide imaging core-lab budget table (planning estimates, not vendor quotes)",
+imaging_site_setup_fr,French site imaging set-up (4 h TEC + 1 h medical),imaging,imaging,per_site,346,346,692,site_price,operations.central_imaging_reading and country==FR,A,"Arrêté 29/07/2024 convention unique, annexe coûts/surcoûts (JORF 03/08/2024), col. 2024",
+rater_certification,Rater training & certification for clinician scales,assessment,rater_vendor,per_rater,1000,2000,3500,none,uses:scale_clinician,D,Assumption,Default 2 raters per site
+epro_setup,ePRO set-up and licence,assessment,it_vendor,per_study,20000,35000,60000,none,uses:scale_pro,D,Assumption,
+dmc_setup,DMC charter and set-up,safety,dmc,per_study,10000,18000,30000,none,operations.dmc,D,Assumption,
+dmc_meeting,DMC meeting (members + independent statistician),safety,dmc,per_meeting,15000,25000,40000,none,operations.dmc,D,Assumption,Default: 1 per 6 months of treatment period
+investigator_meeting,Investigator meeting,startup,events,per_study,30000,60000,120000,none,always,D,Assumption,Can be virtual for small trials
+investigator_fee,Per-patient investigator fee / contreparties,site_conduct,physician,per_patient,500,1500,3000,site_price,always,D,Assumption,FR convention unique allows contreparties on top of surcoûts; country-scaled
+tmf_archiving,eTMF and 25-year archiving,closeout,infrastructure,per_study,10000,20000,40000,none,always,D,Assumption,

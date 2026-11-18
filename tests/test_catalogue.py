@@ -57,6 +57,12 @@ def test_low_mode_high(cat, table):
     assert ((df["low"] <= df["mode"]) & (df["mode"] <= df["high"])).all()
 
 
+def test_site_paid_study_items_are_country_scaled(cat):
+    scaled = set(cat.study_items.index[cat.study_items["country_scaling"] == "site_price"])
+    assert {"pharmacy_annual", "site_monitoring_fee", "investigator_fee"} <= scaled
+    assert "monitoring_visit" not in scaled  # CRO price, not a site price
+
+
 def test_automatic_procedures_exist(cat):
     assert set(AUTO_ONSITE_PROCEDURES) | {TRAVEL_PROCEDURE} <= set(cat.procedures.index)
 
@@ -186,6 +192,7 @@ def drop_column(col: str):
         ("procedures", set_cell(0, "country_scaling", "x"), "country_scaling"),
         ("procedures", set_cell(1, "procedure_id", "consent"), "duplicate"),
         ("study_items", set_cell(0, "driver", "per_lunch"), "unknown driver"),
+        ("study_items", set_cell(0, "country_scaling", "x"), "country_scaling"),
         ("study_items", set_cell(0, "applies_if", "maybe"), "cannot parse"),
         (
             "study_items",

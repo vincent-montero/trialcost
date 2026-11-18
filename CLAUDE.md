@@ -53,7 +53,7 @@ CLAUDE.md
 ## Data model of the catalogue
 
 - `procedures.csv`: per-occurrence site cost, France reference. `country_scaling` = `site_price` (× country site price index × (1 + overhead)) or `none` (vendor price, not scaled).
-- `study_items.csv`: `driver` ∈ `per_study | per_country | per_site | per_site_month | per_site_year | per_month | per_patient | per_patient_visit | per_scan | per_monitoring_visit | per_meeting | per_rater`. `applies_if` is a small condition language: `always`, `country==XX`, `operations.<flag>`, `uses:<procedure_id>`, combined with `and`. Implement it as a tiny explicit parser, not `eval`.
+- `study_items.csv`: `country_scaling` as in `procedures.csv` (site-paid items scaled, CRO/vendor items `none`, D23); `driver` ∈ `per_study | per_country | per_site | per_site_month | per_site_year | per_month | per_patient | per_patient_visit | per_scan | per_monitoring_visit | per_meeting | per_rater`. `applies_if` is a small condition language: `always`, `country==XX`, `operations.<flag>`, `uses:<procedure_id>`, combined with `and`. Implement it as a tiny explicit parser, not `eval`.
 - `countries.csv`: site price index and overhead (triangular), labour cost (informative only), CTA fee range, activation months range (default when a design omits `activation_months`, D21).
 - `constants.csv`: engine-level parameters with the same `low/mode/high` + grade columns; read them via `Catalogue.constant()`, never hard-code.
 - Automatic per-visit procedures on every **on-site** visit: `coordinator_visit`, `logistics_visit`, `vital_signs`, `patient_travel` (if `operations.patient_travel_support`). Remote visits get none of them.
