@@ -24,8 +24,8 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-ra"
+testpaths = ["tests", "src"]
+addopts = "-ra --doctest-modules"
 
 [tool.ruff]
 line-length = 100

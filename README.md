@@ -3,7 +3,7 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding in place (engine step 1/6). **No engine yet.**
+> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions and design schema in place (engine step 2/6). **No engine yet.**
 > Personal project, built exclusively from public sources.
 
 ---
@@ -235,6 +235,8 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D16 | **France = reference country** for unit prices | Public tariffs available (convention unique, CCAM) |
 | D17 | **Evidence grades A–D** on every value | Traceability |
 | D18 | First archetype = **rare neuro phase 2, MRI + scales** | Close to Vincent's domain, exercises most modules |
+| D19 | Deterministic mode uses each distribution's **stated parameter**: Fixed → value, Triangular → mode, LogNormal → median, Beta → mean | Golden-test totals stay hand-checkable from the YAML; a Beta mode would depend on κ |
+| D20 | Design validation adds consistency checks **without changing the schema**: unique arm / visit / country IDs, `screening` ⇔ `day < 0`, ≥ 1 arm, country and post-randomisation visit | Catch typos early; procedure IDs are checked against the catalogue (`catalogue.py`) |
 
 ---
 
@@ -256,6 +258,7 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 12. **German BfArM fee** not found: CTA range = ethics fees + assumed €3–10k.
 13. **Italy**: labour cost, fees and site index not verified.
 14. **Excluded**: IMP manufacturing, sponsor internal staff, VAT, inflation indexing, explicit CRO margin (embedded in rates).
+15. **Beta concentration κ = 20** for screen-failure and dropout rates in the archetype (SD ≈ 0.10 and 0.08), inherited from the prototype. Placeholder until ClinicalTrials.gov priors.
 
 ---
 
@@ -366,6 +369,13 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Engine step 2: distributions, design schema, archetype YAML
+- Done: `src/trialcost/distributions.py` (Fixed / Triangular / LogNormal / Beta with vectorised `sample(rng, size)`, `central()`, `expectation()`, and `draw(..., deterministic=)` as the single sampling entry point); `src/trialcost/design.py` (§3 schema field for field, consistency checks, `n_sites`, `patient_duration_months`, `visits_every()`, `load_design()`); `designs/rare-neuro-ph2-mri-scales.yaml` (same design as the prototype); `tests/test_distributions.py`, `tests/test_design.py` (41 tests incl. one doctest). Pytest now also collects doctests from `src/`.
+- Decisions: D19 (central values for deterministic mode), D20 (extra design validation, schema unchanged). Implementation details that do not change §3: `Operations.monitoring_interval_months` uses `validate_default=True` (otherwise the default 2.0 stays a bare float instead of `Fixed`); `Union[...]` written as `A | B | ...` (equivalent).
+- Assumptions: §6 #15 (Beta κ = 20, placeholder).
+- Results: no cost output yet. Archetype patient duration = 392 d = 12.88 months; all procedure IDs in the YAML exist in `procedures.csv`.
+- Next: step 3 — `catalogue.py` (load + validate CSVs, `applies_if` parser). Open question: per-country `activation_months` is required in the schema and currently duplicates `countries.csv`; should it become optional with the catalogue as default?
 
 ### 2026-11-18 — Engine step 1: repository and package scaffolding
 - Done: `git init`; uv library package `trialcost` (`pyproject.toml`, `uv.lock`, `.python-version` = 3.13, `requires-python >= 3.11`); runtime deps pydantic, numpy, pandas, pyyaml; dev deps pytest, ruff; ruff + pytest config; `.gitignore`; `src/trialcost/__init__.py` (`DATA_DIR`); `tests/test_smoke.py`; empty `designs/`.

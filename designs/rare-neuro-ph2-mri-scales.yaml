@@ -1,0 +1,73 @@
+# Archetype 1 — rare neurological disease, phase 2, MRI + clinical scales (README §3).
+# Same design as prototype/sanity_check.py, so the engine can be compared to it.
+#
+# PLACEHOLDERS (grade D, README §6): population and recruitment values below are
+# to be replaced by ClinicalTrials.gov-derived priors. Beta concentration kappa = 20
+# (SD ~0.10 on SF, ~0.08 on dropout) is the prototype's choice, not sourced.
+# Activation ranges mirror data/countries.csv (activation_months_low/mode/high).
+
+name: rare-neuro-ph2-mri-scales
+n_randomised: 50
+
+arms:
+  - {name: active, ratio: 1}
+  - {name: placebo, ratio: 1, placebo: true}
+
+# 52-week treatment + 4-week follow-up; patient duration = last visit day (392 d).
+visits:
+  - id: SCR
+    day: -28
+    screening: true
+    procedures: [consent, inclusion_medical, labs_central_panel, blood_draw, sample_handling,
+                 ecg, mri_brain, scale_clinician]
+  - id: BL
+    day: 0
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, scale_clinician,
+                 scale_pro, pk_sample, pk_bioanalysis, drug_dispensing]
+  - id: W4
+    day: 28
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, scale_clinician]
+  - id: W12
+    day: 84
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, scale_clinician,
+                 scale_pro, pk_sample, pk_bioanalysis, drug_dispensing]
+  - id: W24
+    day: 168
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, ecg, mri_brain,
+                 scale_clinician, scale_pro, drug_dispensing]
+  - id: W36
+    day: 252
+    remote: true
+    procedures: [scale_pro, ae_review]
+  - id: W52
+    day: 364
+    procedures: [physical_exam, labs_central_panel, blood_draw, sample_handling, ecg, mri_brain,
+                 scale_clinician, scale_pro]
+  - id: FU
+    day: 392
+    remote: true
+    procedures: [ae_review]
+
+countries:
+  - {country: FR, n_sites: 4, activation_months: {kind: triangular, low: 3, mode: 5, high: 9}}
+  - {country: DE, n_sites: 3, activation_months: {kind: triangular, low: 3, mode: 6, high: 9}}
+  - {country: ES, n_sites: 3, activation_months: {kind: triangular, low: 3, mode: 5, high: 8}}
+  - {country: IT, n_sites: 2, activation_months: {kind: triangular, low: 5, mode: 8, high: 12}}
+  - {country: US, n_sites: 3, activation_months: {kind: triangular, low: 3, mode: 5, high: 8}}
+
+population:
+  screen_failure_rate: {kind: beta, mean: 0.35, kappa: 20}
+  annual_dropout_rate: {kind: beta, mean: 0.15, kappa: 20}
+  rate_mean: {kind: lognormal, median: 0.25, gsd: 1.6}   # randomised pts / site / month
+  rate_shape: 1.5
+
+operations:
+  sponsor_model: full_cro
+  monitoring: risk_based
+  monitoring_interval_months: 2.0
+  central_lab: true
+  central_imaging_reading: true
+  irt: true
+  dmc: true
+  n_interim_analyses: 0
+  patient_travel_support: true
