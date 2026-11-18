@@ -18,6 +18,7 @@ import streamlit as st
 from assumptions_tab import active, active_json, assumptions_tab
 from compare_tab import compare_tab, save_control
 from design_editor import design_editor
+from method_tab import method_tab
 
 from trialcost import report
 from trialcost import suggestions as sg
@@ -203,8 +204,8 @@ def main() -> None:
     )
     base, base_name, n_sims, seed, budget = sidebar()
     header = st.container()  # filled after the editor has run
-    tab_results, tab_design, tab_compare, tab_assumptions = st.tabs(
-        ["Results", "Design", "Compare scenarios", "Assumptions & suggestions"]
+    tab_results, tab_design, tab_compare, tab_assumptions, tab_method = st.tabs(
+        ["Results", "Design", "Compare scenarios", "Assumptions & suggestions", "Method & caveats"]
     )
     with tab_design:
         design = design_editor(base, base_name, base_catalogue())
@@ -227,6 +228,8 @@ def main() -> None:
     with tab_assumptions:
         share = result.costs.by("item").mean(axis=1) / result.total.mean()
         assumptions_tab(base_catalogue(), session_catalogue(suggestions_json), share)
+    with tab_method:
+        method_tab(result, session_catalogue(suggestions_json))
 
 
 main()

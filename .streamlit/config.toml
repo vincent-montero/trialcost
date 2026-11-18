@@ -1,0 +1,9 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+# Uploads are small suggestion CSVs.
+maxUploadSize = 1
+
+[theme]
+base = "light"

@@ -3,8 +3,17 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, **engine v0 complete** (design → recruitment → quantities → costs → report, CLI) **first benchmark validation done** (§7.2) and **recruitment / dropout priors from ClinicalTrials.gov** for rare neuro (§2.4); no UI yet. **No engine yet.**
+> Status (2026-11-18): **engine v0** (design → recruitment → quantities → costs → reports, CLI), **benchmark validation** (§7.2), **ClinicalTrials.gov priors** for rare neuro (§2.4) and a **Streamlit MVP** with scenario comparison and reviewer suggestions (§11). Not yet deployed; operational review pending.
 > Personal project, built exclusively from public sources.
+
+## Quick start
+
+```bash
+uv sync --extra ui
+uv run python -m trialcost.simulate designs/rare-neuro-ph2-mri-scales.yaml   # text report
+uv run --extra ui streamlit run app/streamlit_app.py                         # web app
+uv run --extra ui pytest                                                     # tests
+```
 
 ---
 
@@ -313,6 +322,8 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D37 | **ClinicalTrials.gov query for rare-neuro priors** (agreed with Vincent): curated condition list (`data/ctgov/rare_neuro_conditions.csv`, 22 diseases), interventional, phase 2 / 2-3 / 3, randomised, industry lead sponsor, start ≥ 2010, COMPLETED or TERMINATED, actual enrollment; dropout from posted results | Closest to the archetype; terminated trials kept to avoid survivorship bias (they recruit ~40 % slower) |
 | D38 | **Estimation rules**: rate per open site-month with f = 0.75; exclude phase 1/2, < 2 listed sites (generic placeholder locations), T_recruit < 3 months, unparseable time frames; dropout only from first participant-flow period ≥ 6 months; log-normal / Beta fits; archetype uses the **phase 2** subset | Removes artefacts seen in the data (e.g. 144–421 patients at "1 site"; 1-month windows); keeps every trial and its exclusion reason in the trial table |
 | D39 | **Hand-calculated tests use a frozen fixture** (`tests/fixtures/hand-check.yaml`, round values); golden total and P50 band stay on the live archetype and are updated deliberately | Data updates no longer break hand arithmetic; regression tests still flag every change |
+| D40 | **Reviewer suggestions never write to `data/`**: app edits become suggestions (value + mandatory rationale) applied to the reviewer's session only, downloaded as CSV and sent to Vincent; `python -m trialcost.suggestions review / apply --accept` is the only path into `data/` (accepted cells only, grade chosen at apply time, default C, provenance "Expert review YYYY-MM-DD" + rationale, catalogue re-validated, files restored on failure) | Vincent: no one should write straight into `data/`; a hosted app's disk is ephemeral and shared, so suggestions travel as files |
+| D41 | **Streamlit MVP, hosted publicly** (Streamlit Community Cloud planned, D8): tabs Results / Design / Compare scenarios / Assumptions & suggestions / Method & caveats; UI code in `app/`, pure helpers in `src/trialcost/editing.py` and `suggestions.py`; scenarios store design + suggestions; light theme forced (chart palette validated for light mode); `requirements.txt` exported from uv with an editable install; `DATA_DIR` found via `TRIALCOST_DATA_DIR`, the checkout, or `./data` | Vincent wants an MVP to show to a CRA / clinical PM; public data only, so a public link is acceptable |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -406,7 +417,7 @@ Full table: `reports/benchmark-validation.md` (regenerate with `uv run python -m
 3. Fix known gaps: Italy, BfArM fee; check site management vs monitoring overlap against real CRO quotes (D26).
 4. One-hour review of defaults by an operational professional (CRA or clinical project manager): CRO rates, monitoring frequency, investigator fees.
 5. ~~Validation: reconstruct per-phase benchmarks from typical designs.~~ First pass done 2026-11-18 (§7.2). Follow-ups: per-site-month time-driven costs in long trials, fixed costs of small trials, more benchmarks (EU, rare disease, phase 2 medians with trial sizes).
-6. Streamlit UI (quick mode), then stlite static page.
+6. ~~Streamlit UI (quick mode)~~ MVP built 2026-11-18 (§11); hosting on Streamlit Community Cloud pending (needs Vincent's GitHub / Streamlit accounts). stlite static page later.
 7. v1: technical feasibility (power), academic sponsor parameter, inflation indexing, advanced mode.
 
 ---
@@ -494,9 +505,33 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 
 ---
 
+## 11. Web app (Streamlit MVP)
+
+`uv run --extra ui streamlit run app/streamlit_app.py`. Every number comes from the engine and `data/`; the app never writes to `data/`.
+
+| Tab | What it does |
+|---|---|
+| Results | P10/P50/P90 cost, duration, LPI, cost per patient, P(cost ≤ budget); cost and duration histograms; breakdowns by category / resource / country with P10–P90 whiskers; dropout cost; tornado on demand |
+| Design | Edit N, countries and sites, population (ClinicalTrials.gov presets or custom), operations, visit × procedure grid, quick-mode regular visits; download the edited design as YAML |
+| Compare scenarios | Save the current design (and active suggestions) as a scenario; compare up to three: P50 Δ, cumulative distributions, Δ by category / resource / country, list of design changes. Same seed for all, so differences are exact |
+| Assumptions & suggestions | Catalogue tables with grade, source, notes and share of the design's cost; edit a value + rationale → session-only suggestion; download / upload suggestions CSV (D40) |
+| Method & caveats | How the estimate is built, share of the design's cost per evidence grade (archetype: A 7 %, B 30 %, C 26 %, D 37 %), benchmark ratios, known limits |
+
+Reviewer workflow: see `suggestions/README.md`. Deployment: `requirements.txt` (regenerate with `uv export --extra ui --no-dev --no-hashes --format requirements-txt -o requirements.txt` after any dependency change), `.streamlit/config.toml`, entry point `app/streamlit_app.py`.
+
+---
+
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Streamlit MVP (roadmap #6)
+- Done: `app/` (`streamlit_app.py`, `charts.py`, `design_editor.py`, `compare_tab.py`, `assumptions_tab.py`, `method_tab.py`); `src/trialcost/editing.py` (design ↔ tables, presets, YAML, design diff), `src/trialcost/suggestions.py` (suggestion model, validation, session catalogue, review / apply CLI); `report.compare`, `report.category_deltas`; `DATA_DIR` discovery with `TRIALCOST_DATA_DIR`; `requirements.txt`, `.streamlit/config.toml`, `suggestions/README.md`, `suggestions/inbox/` git-ignored; `streamlit` as optional `ui` dependency. Tests: `test_editing.py`, `test_suggestions.py`, `test_app.py` (headless AppTest: runs, edits, scenarios, suggestions, grade shares), 228 pass with `--extra ui`. Status line at the top rewritten (it had accumulated contradictory fragments, incl. "No engine yet").
+- Decisions: D40 (suggestions never write to data/), D41 (Streamlit MVP, public hosting planned).
+- Assumptions: none new.
+- Results: no change to estimates. New figure: 37 % of the archetype's mean cost rests on grade-D values, 7 % on grade A.
+- Not done: visual check of the charts in a browser (Chrome extension not connected; rendering to PNG was blocked in this session); deployment (needs Vincent's accounts).
+- Next: Vincent opens the app locally to check the charts; create the GitHub repository and the Streamlit Community Cloud app; then the operational review with the hosted link.
 
 ### 2026-11-18 — Recruitment and dropout priors from ClinicalTrials.gov (roadmap #2, first pass)
 - Done: `src/trialcost/ctgov.py` (CLI `fetch` / `estimate`; pure parsing and fitting functions); `data/ctgov/rare_neuro_conditions.csv`, `rare_neuro_snapshot.json.gz` (288 studies), `rare_neuro_trials.csv`; `data/recruitment_priors.csv`; constant `site_open_fraction`; archetype population updated (rate and dropout); `tests/fixtures/hand-check.yaml` and hand-calculated tests moved to it; `tests/test_ctgov.py` incl. a check that the committed priors reproduce from the snapshot. 192 tests pass. Benchmark report regenerated.

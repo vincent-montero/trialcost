@@ -13,11 +13,12 @@ Design-driven Monte Carlo estimator of a clinical trial's **total sponsor budget
 - **Never invent a number silently.** A new value without a source is added as grade `D`, `source = "Assumption"`, with the rationale in `notes`. A derived value is grade `C` with the derivation in `source`. Then add it to README §6 if it may matter.
 - **Keep README in sync**: any change to methodology → README §2; any decision → §5 (decision log); any new assumption → §6; any new source → §9 with URL.
 - Do not change the design schema (README §3) or the CSV column sets without asking first.
+- Reviewer input reaches `data/` only through `python -m trialcost.suggestions apply`, run by Vincent (D40). The app must never write to `data/`.
 
 ## Stack and conventions
 
 - Python ≥ 3.11, managed with **uv** (`uv add`, `uv run`). No conda.
-- Pydantic v2, NumPy, pandas, PyYAML; pytest; ruff (lint + format). Streamlit later (UI is not v0 priority).
+- Pydantic v2, NumPy, pandas, PyYAML; pytest; ruff (lint + format). Streamlit + Altair for the app (optional `ui` extra). After any dependency change, regenerate `requirements.txt` (`uv export --extra ui --no-dev --no-hashes --format requirements-txt -o requirements.txt`): the hosted app installs from it.
 - Code, comments, identifiers and docs in **English**.
 - Units: money in **EUR (price year 2026)**, FX fixed at 1 EUR = 1.15 USD (`data/` constants, not code); time in **months** internally (days only in visit definitions, converted with 30.44 d/month).
 - Randomness: always via a `numpy.random.Generator` passed in explicitly, seeded in tests. No global state. Every random input draws from its own child stream (`rng.spawn`, D32): keep it that way when adding inputs, or scenario comparisons (dropout delta, tornado) pick up noise.
@@ -53,7 +54,11 @@ src/trialcost/
   report.py              # quantiles, breakdowns, tornado, dropout-cost report
   validation.py          # benchmark validation report (never asserted in tests)
   ctgov.py               # ClinicalTrials.gov fetch (network) + priors estimation (offline)
+  editing.py             # design <-> editable tables for the app (pure)
+  suggestions.py         # reviewer suggestions; `apply` is the only reviewer path into data/ (D40)
 reports/                 # generated reports (benchmark-validation.md), regenerate, don't hand-edit
+app/                     # Streamlit UI only (streamlit_app.py + one module per tab, charts.py)
+suggestions/             # reviewer workflow README; inbox/ is git-ignored
 tests/
 prototype/sanity_check.py  # throwaway loop-based prototype; reference only, do not extend
 README.md
@@ -89,8 +94,10 @@ CLAUDE.md
 ## Commands
 
 ```bash
-uv sync
-uv run pytest
+uv sync --extra ui
+uv run --extra ui pytest            # app tests are skipped without the ui extra
+uv run --extra ui streamlit run app/streamlit_app.py
+uv run python -m trialcost.suggestions review suggestions/inbox/<file>.csv   # then: apply <file> --accept 1,3 [--grade C]
 uv run ruff check . && uv run ruff format .   # *.md and prototype/ are excluded in pyproject.toml
 uv run python -m trialcost.simulate designs/rare-neuro-ph2-mri-scales.yaml --n-sims 10000 --seed 42
 uv run python -m trialcost.validation --out reports   # benchmark validation report

@@ -113,3 +113,10 @@ def test_suggestion_flow(app):
     assert app.metric[0].value != before
     assert any("reviewer suggestion(s) active" in w.value for w in app.warning)
     assert any(b.label == "Download suggestions (CSV)" for b in app.get("download_button"))
+
+
+def test_method_tab_grade_shares_sum_to_100(app):
+    shares = [m for m in app.metric if m.label[:2] in ("A ", "B ", "C ", "D ")]
+    assert len(shares) == 4
+    total = sum(float(m.value.rstrip(" %")) for m in shares)
+    assert 98 <= total <= 102  # rounding
