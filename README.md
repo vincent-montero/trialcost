@@ -3,7 +3,7 @@
 A design-driven, probabilistic estimator of the **total sponsor budget** of a clinical trial.
 You describe a design (population, visit schedule, procedures, countries, sites, operational options); the tool returns a **cost distribution** (P10 / P50 / P90), an **estimated duration distribution**, and a **breakdown** by cost category, resource type and country.
 
-> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, catalogue loader and recruitment model in place (engine step 4/6). **No engine yet.**
+> Status (2026-11-18): design phase complete, v0 cost catalogue built, throwaway sanity check run, package scaffolding, distributions, design schema, catalogue loader, recruitment, quantities and costing in place (engine step 5/6); no CLI / report yet. **No engine yet.**
 > Personal project, built exclusively from public sources.
 
 ---
@@ -98,6 +98,30 @@ Constant hazard derived from the annual dropout rate. Expected visits completed 
 - **France is the reference country** for site procedure prices (public tariffs exist: convention unique + CCAM).
 - Other countries via a **site price index** (triangular) and a **site overhead rate**; a procedure can carry a country-specific price in `procedure_overrides.csv` (e.g. US research MRI), which replaces *FR price × site index*; the country overhead is added on top only if `apply_overhead` is true (D25).
 - The catalogue contains ~20 generic procedures (v0); finer granularity (e.g. MRI with/without contrast) later.
+
+### 2.8 Quantities and costing (implementation, `quantities.py`, `costing.py`)
+
+What each `study_items.csv` driver multiplies the unit price by, per simulation:
+
+| Driver | Quantity | Level |
+|---|---|---|
+| `per_study` | 1 | study |
+| `per_month` | T_total (study start → CSR) | study |
+| `per_meeting` | DMC meetings = ⌈(T_LPLV − first activation) / interval⌉ (D27) | study |
+| `per_country` | 1 per country | country |
+| `per_site` | sites in the country (all planned sites, recruiting or not) | country |
+| `per_site_month` | Σ sites max(0, T_LPLV − activation) | country |
+| `per_site_year` | site-months / 12 | country |
+| `per_patient` | randomised patients | country |
+| `per_patient_visit` | expected patient-visits (screening visits on screened patients) | country |
+| `per_scan` | occurrences of `imaging`-category procedures (dropout-adjusted) | country |
+| `per_monitoring_visit` | site-months / monitoring interval | country |
+| `per_rater` | raters per site × sites | country |
+
+- Procedures: expected occurrences = Σ visits (patients attending × times listed), plus the automatic on-site procedures once per on-site visit.
+- Unit price in country c: override → override (× (1 + overhead) if `apply_overhead`); `site_price` → FR price × index_c × (1 + overhead_c); `none` → FR price. Same `country_scaling` rule for study items (D23). CTA fees per country from `countries.csv`.
+- Draw sharing: country index and overhead drawn once per simulation and shared by all lines of that country; each catalogue price drawn once per simulation and shared across countries; all catalogue rows drawn in file order on every run (common random numbers across scenarios, D29).
+- Output: `CostLines` = metadata table (item, source, country, category, resource, driver) + `(n_lines, n_sims)` cost array; any breakdown is a groupby on the metadata; `to_frame()` gives the tidy long table (D28).
 
 ---
 
@@ -251,6 +275,8 @@ Rule agreed with Vincent: **assumptions and derivations are acceptable as long a
 | D25 | Country-specific procedure prices in **`procedure_overrides.csv`** (`procedure_id, country, low, mode, high, apply_overhead, evidence, source, notes`). An override is a local EUR price: never multiplied by the site index; overhead added only if `apply_overhead`. **US brain MRI = €687 / 1,000 / 1,261, `apply_overhead = false`** | Vincent delegated the choice. Reasoning: (1) the US site index was itself calibrated on MRI, so *FR × index* would reuse the same evidence with extra noise: a direct US price is stronger; (2) per scan = 1 h research slot + local read, matching the FR definition; low = Baylor CAMRI FY27 single tier ($790 all-in), mode = Penn CAMRIS FY27 industry tier ($1,150 incl. read), high = Penn outside-entity tier ($1,450); (3) no overhead because industry/outside tiers are full-cost-recovery rates (Penn industry = 1.31 × government tier, ≈ US overhead 31–35 %), so adding it would double count. Inference, grade C. Impact small (~€9k on the archetype either way) |
 | D26 | **Keep both `site_management` and `monitoring_visit`**: `site_management` = remote / in-house CRA work per active site-month (CTA, TMF, site contact), `monitoring_visit` = on-site visits | Item definitions do not overlap on paper; possible overlap in real CRO quotes stays flagged in §6 #3 for the operational review (roadmap #4) |
 | D27 | **DMC meetings over the conduct window = first site activation → LPLV**; number of meetings = ⌈window / `dmc_meeting_interval_months`⌉ | DMCs review accrued data during conduct, not only during one patient's treatment period. First activation slightly precedes first patient in (archetype: by ~0.4 month on average), well under one meeting; ceiling counts the partial final period as a meeting |
+| D28 | Cost lines stored as **metadata table + `(n_lines, n_sims)` array**, tidy long table on demand | Breakdowns stay a groupby while 10k sims × ~200 lines remain fast (full pipeline ≈ 45 ms) |
+| D29 | **Common random numbers**: every catalogue row drawn on every run in file order; country factors shared within a country, prices shared across countries | Toggling an option changes only the lines it affects (tested), needed for the Δ-vs-no-dropout report and for a clean tornado |
 
 **Provisional decisions to revisit:** D21 (optional `activation_months`).
 
@@ -275,6 +301,9 @@ Ranked by expected impact. All are in the CSVs with grade C or D.
 13. **Italy**: labour cost, fees and site index not verified.
 14. **Excluded**: IMP manufacturing, sponsor internal staff, VAT, inflation indexing, explicit CRO margin (embedded in rates).
 15. **Beta concentration κ = 20** for screen-failure and dropout rates in the archetype (SD ≈ 0.10 and 0.08), inherited from the prototype. Placeholder until ClinicalTrials.gov priors.
+16. **Driver vs label mismatches (small, to fix in data)**: `edc_hosting` says "after year 1" but `per_month` charges it over all of T_total (~ +€18k at the mode); `pharmacy_annual` says "per additional year" but `per_site_year` counts every site-year (~ +€7–10k). Options: shift the labels, or add a 12-month offset to these two items.
+17. **Operations fields not costed yet**: `sponsor_model`, `monitoring` (full SDV vs risk-based) and `n_interim_analyses` are accepted in the design but no catalogue item depends on them in v0.
+18. **All planned sites cost start-up and close-out**, even when a simulated site recruits nobody (late activation); site-months still stop at LPLV.
 
 ---
 
@@ -385,6 +414,13 @@ Accessed 2026-11-18. Grade in brackets = how the source is used.
 ## 10. Work log
 
 Newest first. Never edit past entries; add corrections as new entries.
+
+### 2026-11-18 — Engine step 5: quantities and costing
+- Done: `src/trialcost/quantities.py` (SF, dropout hazard and visit attendance, automatic on-site procedures, procedure counts as visit × incidence matrix product, scans, site-months, monitoring visits, DMC meetings, `Quantities.driver()`); `src/trialcost/costing.py` (country factors, procedure / override / study-item / CTA pricing, `CostLines` with `total()`, `by()`, `select()`, `to_frame()`); `catalogue.py` rejects `site_price` on study-level items; `tests/conftest.py` (shared pipeline helper), `tests/test_quantities.py`, `tests/test_costing.py` (golden deterministic total, hand-checked lines, breakdown consistency, invariants, common-random-numbers check, timing, P50 regression band). 132 tests pass. Methodology written up in §2.8.
+- Decisions: D28 (cost-line storage), D29 (common random numbers).
+- Assumptions: §6 #16 (driver/label mismatches for `edc_hosting`, `pharmacy_annual`), #17 (operations fields not costed), #18 (all planned sites pay start-up).
+- Results: deterministic (all at mode/median) total **€4,182,180**, T_total 37.8 months. 10k sims (seed 42): total P10/P50/P90 **€4.20M / 4.81M / 5.85M** (prototype 4.15 / 4.71 / 5.74), duration 31.6 / 38.4 / 51.7 months. Largest categories at P50: monitoring €1.13M, management €0.70M, site start-up €0.55M, imaging €0.31M. Full pipeline 10k sims ≈ 45 ms.
+- Next: step 6, `simulate.py` CLI + `report.py` (quantiles, breakdowns, dropout-cost report, tornado). Decide the two label mismatches (§6 #16).
 
 ### 2026-11-18 — Pre-costing decisions: US MRI price, site management, DMC window
 - Done: new `data/procedure_overrides.csv` (1 row: US brain MRI); `catalogue.py` loads and validates it (known procedure and country, unique pair, range, grade, boolean `apply_overhead`) and exposes `procedure_override(procedure_id, country)`; 5 new tests (108 pass). Penn and Baylor sources re-read; the UCSD page has no rates and is now marked not used.

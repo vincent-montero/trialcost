@@ -415,6 +415,8 @@ def _validate(
                 continue
             if cond.needs_country and row["driver"] in STUDY_LEVEL_DRIVERS:
                 s.append(f"study_items: {item}: country condition on {row['driver']} item")
+            if row["country_scaling"] == "site_price" and row["driver"] in STUDY_LEVEL_DRIVERS:
+                s.append(f"study_items: {item}: site_price scaling on {row['driver']} item")
             for pid in cond.procedures_used:
                 if pid not in known_procedures:
                     s.append(f"study_items: {item}: uses unknown procedure {pid!r}")

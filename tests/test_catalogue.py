@@ -201,6 +201,7 @@ def drop_column(col: str):
         ("procedures", set_cell(1, "procedure_id", "consent"), "duplicate"),
         ("study_items", set_cell(0, "driver", "per_lunch"), "unknown driver"),
         ("study_items", set_cell(0, "country_scaling", "x"), "country_scaling"),
+        ("study_items", set_cell(0, "country_scaling", "site_price"), "site_price scaling on"),
         ("study_items", set_cell(0, "applies_if", "maybe"), "cannot parse"),
         (
             "study_items",
